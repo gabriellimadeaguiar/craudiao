@@ -16,6 +16,9 @@ Sua missão: fechar o buraco dando os pontos — com **mão firme** e boa mira.
 
 Funciona no **PC (mouse)** e no **celular (toque)**.
 
+🎵 A **música** (`assets/musica-cirurgia.mp3`) começa exatamente quando a cirurgia
+inicia e toca em loop até o fim da operação.
+
 ## Rodar localmente
 
 Abra o `index.html` com duplo-clique no navegador. Para carregar a foto do Breno
