@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>A Cirurgia do Breno</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #0a0d10;
+    overflow: hidden;
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 30%, #14202b 0%, #070a0d 100%);
+  }
+  canvas {
+    display: block;
+    background: #0b1016;
+    box-shadow: 0 0 60px rgba(0,0,0,0.8);
+    cursor: crosshair;
+    max-width: 100%; max-height: 100%;
+  }
+  #hint {
+    position: fixed; bottom: 6px; left: 0; right: 0;
+    text-align: center; color: #35505f; font-size: 12px;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="900" height="600"></canvas>
+</div>
+<div id="hint">🩺 A Cirurgia do Breno — clique / toque para jogar</div>
+<script>
+"use strict";
+
+// ======================================================================
+//  A CIRURGIA DO BRENO
+//  Jogo de browser: você é o médico que vai fechar o buraco (a mais) do
+//  Breno, dando os pontos. Intro: Breno chega remando de canoa.
+// ======================================================================
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const W = 900, H = 600;            // resolução lógica interna
+canvas.width = W; canvas.height = H;
+
+// --- responsividade: escala o canvas mantendo a proporção ------------
+function fit() {
+  const pad = 8;
+  const availW = window.innerWidth - pad * 2;
+  const availH = window.innerHeight - pad * 2;
+  const scale = Math.min(availW / W, availH / H);
+  canvas.style.width = Math.round(W * scale) + "px";
+  canvas.style.height = Math.round(H * scale) + "px";
+}
+window.addEventListener("resize", fit);
+fit();
+
+// --- foto do Breno (com fallback cartoon) ----------------------------
+const breno = new Image();
+let brenoOK = false;
+breno.onload = () => { brenoOK = true; };
+breno.onerror = () => { brenoOK = false; };
+breno.src = "assets/breno.png";
+
+// --- música da cirurgia (começa quando o Breno entra na mesa) --------
+const musicaCirurgia = new Audio("assets/musica-cirurgia.mp3");
+musicaCirurgia.loop = true;
+musicaCirurgia.volume = 0.6;
+
+// ======================================================================
+//  Áudio simples (WebAudio) — bips sem arquivos externos
+// ======================================================================
+let audioCtx = null;
+function beep(freq, dur, type = "sine", vol = 0.15) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g); g.connect(audioCtx.destination);
+    const t = audioCtx.currentTime;
+    o.start(t);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.stop(t + dur);
+  } catch (e) {}
+}
+const sfx = {
+  ok:   () => beep(660, 0.08, "triangle", 0.18),
+  ouch: () => { beep(150, 0.18, "sawtooth", 0.22); setTimeout(() => beep(110, 0.22, "sawtooth", 0.2), 90); },
+  win:  () => { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 0.15, "triangle", 0.2), i * 130)); },
+  lose: () => { [400, 300, 200, 130].forEach((f, i) => setTimeout(() => beep(f, 0.25, "sawtooth", 0.2), i * 160)); },
+};
+
+// ======================================================================
+//  Entrada unificada mouse + toque
+// ======================================================================
+const pointer = { x: W / 2, y: H / 2, down: false, justPressed: false };
+function toLocal(clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: (clientX - r.left) / r.width * W,
+    y: (clientY - r.top) / r.height * H,
+  };
+}
+function onDown(x, y) {
+  const p = toLocal(x, y);
+  pointer.x = p.x; pointer.y = p.y;
+  pointer.down = true; pointer.justPressed = true;
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+}
+function onMove(x, y) {
+  const p = toLocal(x, y);
+  pointer.x = p.x; pointer.y = p.y;
+}
+function onUp() { pointer.down = false; }
+
+canvas.addEventListener("mousedown", e => onDown(e.clientX, e.clientY));
+window.addEventListener("mousemove", e => onMove(e.clientX, e.clientY));
+window.addEventListener("mouseup", onUp);
+canvas.addEventListener("touchstart", e => { e.preventDefault(); const t = e.changedTouches[0]; onDown(t.clientX, t.clientY); }, { passive: false });
+canvas.addEventListener("touchmove", e => { e.preventDefault(); const t = e.changedTouches[0]; onMove(t.clientX, t.clientY); }, { passive: false });
+canvas.addEventListener("touchend", e => { e.preventDefault(); onUp(); }, { passive: false });
+
+// helpers de clique em botão
+function pointInRect(px, py, r) {
+  return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+}
+
+// ======================================================================
+//  Utilidades de desenho
+// ======================================================================
+function drawBrenoPhoto(cx, cy, size, opts = {}) {
+  // desenha a foto do Breno (ou fallback cartoon) num círculo/retângulo
+  const { round = true, tint = 0, shake = 0 } = opts;
+  const dx = shake ? (Math.random() - 0.5) * shake : 0;
+  const dy = shake ? (Math.random() - 0.5) * shake : 0;
+  ctx.save();
+  ctx.translate(cx + dx, cy + dy);
+  if (round) {
+    ctx.beginPath();
+    ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+    ctx.clip();
+  }
+  if (brenoOK) {
+    ctx.drawImage(breno, -size / 2, -size / 2, size, size);
+  } else {
+    drawCartoonBreno(size);
+  }
+  if (tint > 0) {
+    ctx.fillStyle = `rgba(200,20,20,${tint})`;
+    ctx.fillRect(-size / 2, -size / 2, size, size);
+  }
+  ctx.restore();
+  if (round) {
+    ctx.beginPath();
+    ctx.arc(cx + dx, cy + dy, size / 2, 0, Math.PI * 2);
+    ctx.lineWidth = 4; ctx.strokeStyle = "#e8eef2";
+    ctx.stroke();
+  }
+}
+
+function drawCartoonBreno(size) {
+  // fallback simples caso a foto não exista — rosto cartoon
+  const s = size;
+  ctx.fillStyle = "#1c1c1f";
+  ctx.fillRect(-s / 2, -s / 2, s, s);
+  // rosto
+  ctx.fillStyle = "#d9a173";
+  ctx.beginPath(); ctx.arc(0, s * 0.02, s * 0.32, 0, Math.PI * 2); ctx.fill();
+  // cabelo
+  ctx.fillStyle = "#2a1d16";
+  ctx.beginPath(); ctx.arc(0, -s * 0.15, s * 0.32, Math.PI, 0); ctx.fill();
+  // barba
+  ctx.fillStyle = "#2a1d16";
+  ctx.beginPath(); ctx.arc(0, s * 0.05, s * 0.30, 0.25, Math.PI - 0.25); ctx.fill();
+  // olhos
+  ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.arc(-s * 0.11, -s * 0.02, s * 0.05, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(s * 0.11, -s * 0.02, s * 0.05, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#000";
+  ctx.beginPath(); ctx.arc(-s * 0.11, -s * 0.02, s * 0.025, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(s * 0.11, -s * 0.02, s * 0.025, 0, Math.PI * 2); ctx.fill();
+  // sorriso
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = s * 0.03;
+  ctx.beginPath(); ctx.arc(0, s * 0.04, s * 0.14, 0.2, Math.PI - 0.2); ctx.stroke();
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawButton(r, label, color = "#1f9d6b") {
+  const hover = pointInRect(pointer.x, pointer.y, r);
+  ctx.save();
+  roundRect(r.x, r.y, r.w, r.h, 14);
+  ctx.fillStyle = hover ? "#27c187" : color;
+  ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.stroke();
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 26px Trebuchet MS";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 1);
+  ctx.restore();
+}
+
+function wrapText(text, x, y, maxW, lineH, font, color) {
+  ctx.font = font; ctx.fillStyle = color;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const words = text.split(" ");
+  let line = "", yy = y;
+  for (const w of words) {
+    const test = line ? line + " " + w : w;
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, x, yy); line = w; yy += lineH;
+    } else line = test;
+  }
+  ctx.fillText(line, x, yy);
+  return yy;
+}
+
+// ======================================================================
+//  Estado global do jogo
+// ======================================================================
+const STATE = { TITULO: 0, INTRO: 1, BRIEFING: 2, CIRURGIA: 3, FIM: 4 };
+let state = STATE.TITULO;
+let t = 0;             // tempo global (frames)
+let stateTime = 0;     // tempo no estado atual
+
+function go(s) { state = s; stateTime = 0; }
+
+// botões reutilizados
+const btnIniciar  = { x: W/2 - 130, y: 430, w: 260, h: 66 };
+const btnComecar  = { x: W/2 - 150, y: 470, w: 300, h: 66 };
+const btnDeNovo   = { x: W/2 - 140, y: 470, w: 280, h: 60 };
+const btnPular    = { x: W - 150, y: H - 60, w: 130, h: 40 };
+
+// ======================================================================
+//  TÍTULO
+// ======================================================================
+function updateTitulo() {
+  if (pointer.justPressed && pointInRect(pointer.x, pointer.y, btnIniciar)) {
+    sfx.ok(); go(STATE.INTRO);
+  }
+}
+function drawTitulo() {
+  // fundo
+  ctx.fillStyle = "#0c1218"; ctx.fillRect(0, 0, W, H);
+  // cruz de hospital pulsante
+  const pulse = 1 + Math.sin(t * 0.05) * 0.04;
+  ctx.save();
+  ctx.translate(W/2, 150); ctx.scale(pulse, pulse);
+  ctx.fillStyle = "#e23b3b";
+  ctx.fillRect(-18, -55, 36, 110);
+  ctx.fillRect(-55, -18, 110, 36);
+  ctx.restore();
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 62px Trebuchet MS";
+  ctx.fillText("A CIRURGIA DO BRENO", W/2, 300);
+  ctx.fillStyle = "#8fb4c4";
+  ctx.font = "italic 24px Trebuchet MS";
+  ctx.fillText("Dr(a). Você  ×  o buraco (a mais)", W/2, 345);
+
+  ctx.fillStyle = "#4f6b78";
+  ctx.font = "18px Trebuchet MS";
+  ctx.fillText("Uma emergência delicada. Mão firme, doutor(a).", W/2, 388);
+
+  drawButton(btnIniciar, "▶  INICIAR");
+}
+
+// ======================================================================
+//  INTRO — Breno remando de canoa até o hospital
+// ======================================================================
+const intro = {
+  canoeX: -180,       // posição da canoa
+  legendas: [
+    "Breno acordou com um problema... um buraco a mais.",
+    "Sem tempo pra Uber, ele pega a canoa.",
+    "E rema. Rema desesperado até o hospital.",
+    "Chegou! É com você agora, doutor(a).",
+  ],
+};
+function updateIntro() {
+  intro.canoeX += 1.9;
+  if (pointer.justPressed && pointInRect(pointer.x, pointer.y, btnPular)) { go(STATE.BRIEFING); }
+  if (intro.canoeX > W - 200) { // chegou perto do hospital
+    if (stateTime > 60) go(STATE.BRIEFING);
+  }
+}
+function drawIntro() {
+  // céu
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, "#87c5e8");
+  sky.addColorStop(1, "#cfeefb");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H*0.55);
+
+  // sol
+  ctx.fillStyle = "#fff3b0";
+  ctx.beginPath(); ctx.arc(120, 90, 40, 0, Math.PI*2); ctx.fill();
+
+  // hospital ao fundo (direita)
+  drawHospital(W - 150, H*0.28);
+
+  // água
+  const water = ctx.createLinearGradient(0, H*0.5, 0, H);
+  water.addColorStop(0, "#2a7fb0");
+  water.addColorStop(1, "#12496a");
+  ctx.fillStyle = water; ctx.fillRect(0, H*0.5, W, H*0.5);
+
+  // ondas
+  ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 3;
+  for (let row = 0; row < 5; row++) {
+    ctx.beginPath();
+    const yy = H*0.56 + row * 35;
+    for (let x = 0; x <= W; x += 20) {
+      const y = yy + Math.sin((x + t*2 + row*40) * 0.03) * 5;
+      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // canoa + Breno
+  const bob = Math.sin(t * 0.12) * 8;
+  const cy = H * 0.62 + bob;
+  drawCanoe(intro.canoeX, cy, t);
+
+  // legenda (troca conforme progresso)
+  const idx = Math.min(intro.legendas.length - 1, Math.floor(stateTime / 95));
+  ctx.save();
+  roundRect(W/2 - 340, H - 92, 680, 60, 12);
+  ctx.fillStyle = "rgba(4,10,16,0.78)"; ctx.fill();
+  wrapText(intro.legendas[idx], W/2, H - 62, 640, 26,
+           "bold 22px Trebuchet MS", "#eaf4ff");
+  ctx.restore();
+
+  drawButton(btnPular, "Pular ⏭", "#37566a");
+}
+
+function drawHospital(x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "#e9eef2";
+  ctx.fillRect(-90, 0, 180, 150);
+  ctx.fillStyle = "#cdd6dc";
+  ctx.fillRect(-90, 0, 180, 22);
+  // cruz
+  ctx.fillStyle = "#e23b3b";
+  ctx.fillRect(-12, 40, 24, 64);
+  ctx.fillRect(-32, 60, 64, 24);
+  // janelas
+  ctx.fillStyle = "#8fb9d6";
+  for (let i = -1; i <= 1; i += 2)
+    for (let j = 0; j < 2; j++)
+      ctx.fillRect(i * 55 - 12, 40 + j * 45, 24, 28);
+  // porta
+  ctx.fillStyle = "#5b7688"; ctx.fillRect(-18, 118, 36, 32);
+  ctx.restore();
+}
+
+function drawCanoe(x, y, tt) {
+  ctx.save();
+  ctx.translate(x, y);
+  const tilt = Math.sin(tt * 0.12) * 0.05;
+  ctx.rotate(tilt);
+
+  // reflexo/água deslocada
+  // Breno sentado (foto)
+  drawBrenoPhoto(0, -46, 78, { round: true });
+  // corpo/camiseta
+  ctx.fillStyle = "#111318";
+  roundRect(-30, -20, 60, 46, 12); ctx.fill();
+
+  // remo animado (vai e volta)
+  const stroke = Math.sin(tt * 0.25);
+  ctx.save();
+  ctx.translate(28, -6);
+  ctx.rotate(stroke * 0.9 - 0.3);
+  ctx.strokeStyle = "#7a4a22"; ctx.lineWidth = 7; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, 55); ctx.stroke();
+  ctx.fillStyle = "#7a4a22";
+  ctx.beginPath(); ctx.ellipse(0, 58, 10, 20, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // outro remo (lado oposto, defasado)
+  ctx.save();
+  ctx.translate(-28, -6);
+  ctx.rotate(-(-stroke * 0.9 - 0.3));
+  ctx.strokeStyle = "#7a4a22"; ctx.lineWidth = 7; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, 55); ctx.stroke();
+  ctx.fillStyle = "#7a4a22";
+  ctx.beginPath(); ctx.ellipse(0, 58, 10, 20, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // casco da canoa
+  ctx.fillStyle = "#a9691f";
+  ctx.beginPath();
+  ctx.moveTo(-95, 15);
+  ctx.quadraticCurveTo(0, 70, 95, 15);
+  ctx.quadraticCurveTo(60, 40, 0, 42);
+  ctx.quadraticCurveTo(-60, 40, -95, 15);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#7c4a12";
+  ctx.beginPath();
+  ctx.moveTo(-95, 15);
+  ctx.quadraticCurveTo(0, 32, 95, 15);
+  ctx.lineTo(85, 22);
+  ctx.quadraticCurveTo(0, 40, -85, 22);
+  ctx.closePath(); ctx.fill();
+
+  ctx.restore();
+
+  // splash na frente da canoa
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  for (let i = 0; i < 4; i++) {
+    const sx = x + 90 + Math.random()*20;
+    const sy = y + 10 + Math.random()*20;
+    ctx.beginPath(); ctx.arc(sx, sy, Math.random()*4+1, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+// ======================================================================
+//  BRIEFING — instruções
+// ======================================================================
+function updateBriefing() {
+  if (pointer.justPressed && pointInRect(pointer.x, pointer.y, btnComecar)) {
+    sfx.ok(); startCirurgia();
+  }
+}
+function drawBriefing() {
+  ctx.fillStyle = "#0c1218"; ctx.fillRect(0, 0, W, H);
+  drawBrenoPhoto(W/2, 130, 130, { round: true });
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fff"; ctx.font = "bold 40px Trebuchet MS";
+  ctx.fillText("Sala de cirurgia", W/2, 240);
+
+  const linhas = [
+    "🎯  Feche o buraco dando os pontos.",
+    "🔀  Clique nos pontos de ancoragem ALTERNANDO os lados.",
+    "✋  Mão firme! A mira treme — mire com calma.",
+    "❤️  Cada erro machuca o Breno. Não deixe a dor estourar!",
+  ];
+  ctx.fillStyle = "#bcd4e0"; ctx.font = "22px Trebuchet MS";
+  linhas.forEach((l, i) => ctx.fillText(l, W/2, 300 + i * 40));
+
+  drawButton(btnComecar, "🔪  COMEÇAR CIRURGIA", "#c0392b");
+}
+
+// ======================================================================
+//  CIRURGIA — mecânica de costura (mira / mão firme)
+// ======================================================================
+const surg = {
+  anchors: [],       // pontos de ancoragem alternados
+  nextIdx: 0,        // próximo ponto a acertar
+  stitches: [],      // pontos já dados (pares)
+  dor: 100,          // "vida"; 0 = derrota
+  score: 0,
+  combo: 0,
+  shake: 0,          // shake da foto do Breno
+  tint: 0,           // overlay vermelho
+  woundY: 330,
+  woundX0: 250,
+  woundX1: 650,
+  msg: "",
+  msgT: 0,
+  time: 0,
+};
+
+function startCirurgia() {
+  surg.anchors = [];
+  surg.nextIdx = 0;
+  surg.stitches = [];
+  surg.dor = 100;
+  surg.score = 0;
+  surg.combo = 0;
+  surg.shake = 0;
+  surg.tint = 0;
+  surg.msg = "Dê o primeiro ponto!";
+  surg.msgT = 120;
+  surg.time = 0;
+
+  const N = 7; // pares de pontos ao longo do ferimento
+  for (let i = 0; i < N; i++) {
+    const x = surg.woundX0 + (surg.woundX1 - surg.woundX0) * (i / (N - 1));
+    const side = i % 2 === 0 ? -1 : 1; // alterna cima/baixo da fenda
+    surg.anchors.push({ x: x, y: surg.woundY + side * 26, done: false, side });
+  }
+  // dispara a música bem no início da operação
+  try { musicaCirurgia.currentTime = 0; musicaCirurgia.play().catch(() => {}); } catch (e) {}
+  go(STATE.CIRURGIA);
+}
+
+function aimPoint() {
+  // mão trêmula: adiciona um wobble à posição do ponteiro
+  const wob = 10 + (100 - surg.dor) * 0.08; // treme mais quando o Breno está mal
+  const ax = pointer.x + Math.sin(t * 0.4) * wob + Math.cos(t * 0.27) * wob * 0.5;
+  const ay = pointer.y + Math.cos(t * 0.33) * wob + Math.sin(t * 0.51) * wob * 0.5;
+  return { x: ax, y: ay };
+}
+
+function updateCirurgia() {
+  surg.time++;
+  if (surg.shake > 0) surg.shake *= 0.85;
+  if (surg.tint > 0) surg.tint *= 0.92;
+  if (surg.msgT > 0) surg.msgT--;
+
+  if (pointer.justPressed) {
+    const aim = aimPoint();
+    const target = surg.anchors[surg.nextIdx];
+    const d = Math.hypot(aim.x - target.x, aim.y - target.y);
+    const tol = 26;
+    if (d <= tol) {
+      // acertou o ponto certo
+      target.done = true;
+      if (surg.nextIdx > 0) {
+        surg.stitches.push({ a: surg.anchors[surg.nextIdx - 1], b: target });
+      }
+      surg.combo++;
+      const bonus = d < 12 ? 150 : 90; // precisão extra
+      surg.score += bonus + surg.combo * 10;
+      surg.msg = d < 12 ? "PERFEITO! +" + (bonus + surg.combo*10) : "Bom ponto! +" + (bonus + surg.combo*10);
+      surg.msgT = 60;
+      sfx.ok();
+      surg.nextIdx++;
+      if (surg.nextIdx >= surg.anchors.length) {
+        finishCirurgia(true);
+      }
+    } else {
+      // errou
+      surg.combo = 0;
+      const dano = 18;
+      surg.dor -= dano;
+      surg.shake = 14;
+      surg.tint = 0.55;
+      surg.msg = "AI! CUIDADO!  -" + dano + " ❤️";
+      surg.msgT = 60;
+      sfx.ouch();
+      if (surg.dor <= 0) { surg.dor = 0; finishCirurgia(false); }
+    }
+  }
+}
+
+function finishCirurgia(win) {
+  // para a música ao terminar a cirurgia (deixa o jingle de vitória/derrota tocar)
+  try { musicaCirurgia.pause(); } catch (e) {}
+  fim.win = win;
+  if (win) {
+    // bônus por dor restante e rapidez
+    surg.score += Math.round(surg.dor * 12);
+    const tsec = surg.time / 60;
+    surg.score += Math.max(0, Math.round((40 - tsec) * 20));
+    sfx.win();
+  } else {
+    sfx.lose();
+  }
+  fim.score = surg.score;
+  go(STATE.FIM);
+}
+
+function drawCirurgia() {
+  // sala de cirurgia (fundo)
+  ctx.fillStyle = "#12303a"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#0e2730"; ctx.fillRect(0, H*0.7, W, H*0.3);
+  // luz cirúrgica
+  const light = ctx.createRadialGradient(W/2, 40, 40, W/2, 340, 420);
+  light.addColorStop(0, "rgba(255,255,255,0.22)");
+  light.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = light; ctx.fillRect(0, 0, W, H);
+
+  // maca
+  ctx.fillStyle = "#1a4552";
+  roundRect(120, 220, W - 240, 240, 24); ctx.fill();
+  ctx.fillStyle = "#0f333d";
+  roundRect(120, 220, W - 240, 30, 24); ctx.fill();
+
+  // Breno (rosto reagindo) no topo da maca
+  drawBrenoPhoto(W/2, 150, 120, { round: true, shake: surg.shake, tint: surg.tint });
+  ctx.textAlign = "center"; ctx.fillStyle = "#cfe3ec";
+  ctx.font = "italic 18px Trebuchet MS";
+  const fala = surg.tint > 0.2 ? "AIIINNN!! 😖" : (surg.dor < 40 ? "tá doendo, doutor... 😣" : "confio em você 🙏");
+  ctx.fillText("Breno: " + fala, W/2, 225);
+
+  // ferimento (a fenda + o buraco a mais)
+  drawWound();
+
+  // pontos de ancoragem
+  for (let i = 0; i < surg.anchors.length; i++) {
+    const a = surg.anchors[i];
+    ctx.beginPath(); ctx.arc(a.x, a.y, 9, 0, Math.PI*2);
+    if (a.done) { ctx.fillStyle = "#7fe0a8"; }
+    else if (i === surg.nextIdx) {
+      const pl = 1 + Math.sin(t * 0.2) * 0.35;
+      ctx.fillStyle = "#ffd54a";
+      ctx.save(); ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.arc(a.x, a.y, 9 * (1.4 + pl*0.5), 0, Math.PI*2);
+      ctx.fillStyle = "#ffd54a"; ctx.fill(); ctx.restore();
+      ctx.fillStyle = "#ffd54a";
+    } else ctx.fillStyle = "#b98b8b";
+    ctx.beginPath(); ctx.arc(a.x, a.y, i === surg.nextIdx ? 11 : 8, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // suturas já dadas (zig-zag)
+  ctx.strokeStyle = "#eaeaea"; ctx.lineWidth = 3;
+  for (const s of surg.stitches) {
+    ctx.beginPath(); ctx.moveTo(s.a.x, s.a.y); ctx.lineTo(s.b.x, s.b.y); ctx.stroke();
+    // nó
+    ctx.fillStyle = "#eaeaea";
+    ctx.beginPath(); ctx.arc(s.b.x, s.b.y, 3, 0, Math.PI*2); ctx.fill();
+  }
+
+  // mira trêmula (agulha)
+  const aim = aimPoint();
+  drawNeedle(aim.x, aim.y);
+
+  // HUD
+  drawHUD();
+
+  // mensagem flutuante
+  if (surg.msgT > 0) {
+    ctx.globalAlpha = Math.min(1, surg.msgT / 30);
+    ctx.textAlign = "center";
+    ctx.font = "bold 30px Trebuchet MS";
+    ctx.fillStyle = surg.msg.includes("AI") ? "#ff6b6b" : "#8ff0b6";
+    ctx.fillText(surg.msg, W/2, 500);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawWound() {
+  // pele
+  ctx.save();
+  ctx.fillStyle = "#d99b74";
+  roundRect(surg.woundX0 - 70, surg.woundY - 80, (surg.woundX1 - surg.woundX0) + 140, 160, 40);
+  ctx.fill();
+  ctx.restore();
+
+  // o "buraco a mais" (aberto) — clareira escura no meio
+  const grd = ctx.createRadialGradient(W/2, surg.woundY, 4, W/2, surg.woundY, 60);
+  grd.addColorStop(0, "#4a0d0d");
+  grd.addColorStop(1, "#7a1414");
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.ellipse(W/2, surg.woundY, 62, 26, 0, 0, Math.PI*2); ctx.fill();
+
+  // borda avermelhada da fenda entre os pontos ainda abertos
+  ctx.strokeStyle = "#a12626"; ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(surg.woundX0, surg.woundY);
+  ctx.lineTo(surg.woundX1, surg.woundY);
+  ctx.stroke();
+
+  // conforme fecha, a "tampa" some — feedback visual do progresso
+  const closed = surg.nextIdx / surg.anchors.length;
+  ctx.fillStyle = `rgba(217,155,116,${closed})`;
+  ctx.beginPath(); ctx.ellipse(W/2, surg.woundY, 62 * closed, 24 * closed, 0, 0, Math.PI*2); ctx.fill();
+}
+
+function drawNeedle(x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.6);
+  // fio
+  ctx.strokeStyle = "rgba(230,230,230,0.7)"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-20, -25, -6, -45); ctx.stroke();
+  // agulha curva
+  ctx.strokeStyle = "#dfe6ea"; ctx.lineWidth = 4; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(0, 6, 12, -Math.PI*0.9, Math.PI*0.2); ctx.stroke();
+  ctx.restore();
+  // ponto de mira
+  ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x-9, y); ctx.lineTo(x+9, y);
+  ctx.moveTo(x, y-9); ctx.lineTo(x, y+9); ctx.stroke();
+}
+
+function drawHUD() {
+  // barra de dor/vida
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#cfe3ec"; ctx.font = "bold 18px Trebuchet MS";
+  ctx.fillText("❤️ Aguento do Breno", 30, 34);
+  ctx.fillStyle = "#22323a";
+  roundRect(30, 44, 260, 22, 11); ctx.fill();
+  const c = surg.dor > 55 ? "#4fd07f" : surg.dor > 25 ? "#ffcc4d" : "#ff5b5b";
+  ctx.fillStyle = c;
+  roundRect(30, 44, 260 * (surg.dor / 100), 22, 11); ctx.fill();
+
+  // pontos dados
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#cfe3ec"; ctx.font = "bold 20px Trebuchet MS";
+  ctx.fillText("Pontos: " + surg.nextIdx + "/" + surg.anchors.length, W - 30, 34);
+  ctx.fillText("Placar: " + surg.score, W - 30, 60);
+  if (surg.combo > 1) {
+    ctx.fillStyle = "#ffd54a";
+    ctx.fillText("Combo x" + surg.combo, W - 30, 86);
+  }
+}
+
+// ======================================================================
+//  FIM — vitória / derrota
+// ======================================================================
+const fim = { win: true, score: 0 };
+function updateFim() {
+  if (pointer.justPressed && pointInRect(pointer.x, pointer.y, btnDeNovo)) {
+    go(STATE.TITULO);
+  }
+}
+function drawFim() {
+  ctx.fillStyle = fim.win ? "#0d1f16" : "#1f0d0d"; ctx.fillRect(0, 0, W, H);
+
+  drawBrenoPhoto(W/2, 160, 150, { round: true, tint: fim.win ? 0 : 0.15 });
+
+  ctx.textAlign = "center";
+  ctx.font = "bold 54px Trebuchet MS";
+  ctx.fillStyle = fim.win ? "#7fe0a8" : "#ff6b6b";
+  ctx.fillText(fim.win ? "CIRURGIA UM SUCESSO! 🎉" : "OPERAÇÃO FRACASSOU 💀", W/2, 300);
+
+  ctx.fillStyle = "#d7e6ee"; ctx.font = "24px Trebuchet MS";
+  const sub = fim.win
+    ? "Buraco fechado! O Breno já pode sentar de novo."
+    : "O Breno não aguentou... a bunda pede desculpas.";
+  ctx.fillText(sub, W/2, 350);
+
+  ctx.fillStyle = "#ffd54a"; ctx.font = "bold 34px Trebuchet MS";
+  ctx.fillText("Placar final: " + fim.score, W/2, 410);
+
+  drawButton(btnDeNovo, "🔁  JOGAR DE NOVO", "#1f9d6b");
+}
+
+// ======================================================================
+//  Loop principal
+// ======================================================================
+function loop() {
+  t++; stateTime++;
+  ctx.clearRect(0, 0, W, H);
+
+  switch (state) {
+    case STATE.TITULO:   updateTitulo();   drawTitulo();   break;
+    case STATE.INTRO:    updateIntro();    drawIntro();    break;
+    case STATE.BRIEFING: updateBriefing(); drawBriefing(); break;
+    case STATE.CIRURGIA: updateCirurgia(); drawCirurgia(); break;
+    case STATE.FIM:      updateFim();      drawFim();      break;
+  }
+
+  pointer.justPressed = false; // consome o clique deste frame
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
