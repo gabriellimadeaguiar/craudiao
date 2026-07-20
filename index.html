@@ -71,6 +71,11 @@ breno.onload = () => { brenoOK = true; };
 breno.onerror = () => { brenoOK = false; };
 breno.src = "assets/breno.png";
 
+// --- música da cirurgia (começa quando o Breno entra na mesa) --------
+const musicaCirurgia = new Audio("assets/musica-cirurgia.mp3");
+musicaCirurgia.loop = true;
+musicaCirurgia.volume = 0.6;
+
 // ======================================================================
 //  Áudio simples (WebAudio) — bips sem arquivos externos
 // ======================================================================
@@ -498,6 +503,8 @@ function startCirurgia() {
     const side = i % 2 === 0 ? -1 : 1; // alterna cima/baixo da fenda
     surg.anchors.push({ x: x, y: surg.woundY + side * 26, done: false, side });
   }
+  // dispara a música bem no início da operação
+  try { musicaCirurgia.currentTime = 0; musicaCirurgia.play().catch(() => {}); } catch (e) {}
   go(STATE.CIRURGIA);
 }
 
@@ -552,6 +559,8 @@ function updateCirurgia() {
 }
 
 function finishCirurgia(win) {
+  // para a música ao terminar a cirurgia (deixa o jingle de vitória/derrota tocar)
+  try { musicaCirurgia.pause(); } catch (e) {}
   fim.win = win;
   if (win) {
     // bônus por dor restante e rapidez
