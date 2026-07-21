@@ -453,10 +453,10 @@ function drawBriefing() {
   ctx.fillText("Sala de cirurgia", W/2, 240);
 
   const linhas = [
-    "🎯  Feche o buraco dando os pontos.",
-    "🔀  Clique nos pontos de ancoragem ALTERNANDO os lados.",
-    "✋  Mão firme! A mira treme — mire com calma.",
-    "❤️  Cada erro machuca o Breno. Não deixe a dor estourar!",
+    "🎯  Costure o desenho de cada fase seguindo o guia tracejado.",
+    "🔢  Clique nos pontos NA ORDEM (o próximo pisca em amarelo).",
+    "🩹  São " + LEVELS.length + " fases: buraco, coração, estrela e raio.",
+    "✋  Mão firme! A mira treme. ❤️ Cada erro machuca o Breno.",
   ];
   ctx.fillStyle = "#bcd4e0"; ctx.font = "22px Trebuchet MS";
   linhas.forEach((l, i) => ctx.fillText(l, W/2, 300 + i * 40));
@@ -465,44 +465,99 @@ function drawBriefing() {
 }
 
 // ======================================================================
-//  CIRURGIA — mecânica de costura (mira / mão firme)
+//  CIRURGIA — mecânica de costura (mira / mão firme) + FASES
 // ======================================================================
+
+// geometria da bunda do Breno (duas nádegas + cofrinho)
+const BUNDA = { cx: 450, cy: 345, R: 96, sep: 68 };
+
+// --- geradores de forma: cada fase é um desenho pra costurar ----------
+// cada gerador devolve uma lista ordenada de pontos {x,y} (canvas).
+function shapeReta() {
+  // "o buraco a mais": costura em zigue-zague fechando a fenda central
+  const pts = [], N = 7, x0 = 350, x1 = 550, y = BUNDA.cy;
+  for (let i = 0; i < N; i++) {
+    const x = x0 + (x1 - x0) * (i / (N - 1));
+    pts.push({ x, y: y + (i % 2 ? 26 : -26) });
+  }
+  return pts;
+}
+function shapeCoracao() {
+  // coração na nádega esquerda
+  const pts = [], N = 14, cx = BUNDA.cx - BUNDA.sep, cy = BUNDA.cy - 4, s = 4.4;
+  for (let i = 0; i < N; i++) {
+    const th = (i / N) * Math.PI * 2;
+    const hx = 16 * Math.pow(Math.sin(th), 3);
+    const hy = 13 * Math.cos(th) - 5 * Math.cos(2 * th) - 2 * Math.cos(3 * th) - Math.cos(4 * th);
+    pts.push({ x: cx + hx * s, y: cy - hy * s });
+  }
+  return pts;
+}
+function shapeEstrela() {
+  // estrela de 5 pontas na nádega direita
+  const pts = [], cx = BUNDA.cx + BUNDA.sep, cy = BUNDA.cy, R = 52, r = 22, spikes = 5;
+  for (let i = 0; i < spikes * 2; i++) {
+    const rad = i % 2 ? r : R;
+    const a = -Math.PI / 2 + i * Math.PI / spikes;
+    pts.push({ x: cx + Math.cos(a) * rad, y: cy + Math.sin(a) * rad });
+  }
+  return pts;
+}
+function shapeRaio() {
+  // raio / zigue-zague descendo pela bunda
+  return [
+    { x: 405, y: 268 }, { x: 475, y: 300 }, { x: 418, y: 330 },
+    { x: 500, y: 362 }, { x: 435, y: 392 }, { x: 520, y: 420 },
+  ];
+}
+
+const LEVELS = [
+  { nome: "O buraco a mais", closed: false, gen: shapeReta,    dica: "feche a fenda no zigue-zague" },
+  { nome: "Coração",         closed: true,  gen: shapeCoracao, dica: "borde um coração na nádega" },
+  { nome: "Estrela",         closed: true,  gen: shapeEstrela, dica: "costure uma estrela de 5 pontas" },
+  { nome: "Raio",            closed: false, gen: shapeRaio,    dica: "siga o raio de cima a baixo" },
+];
+
 const surg = {
-  anchors: [],       // pontos de ancoragem alternados
+  anchors: [],       // pontos de ancoragem da fase atual
   nextIdx: 0,        // próximo ponto a acertar
-  stitches: [],      // pontos já dados (pares)
+  stitches: [],      // pontos já dados (pares) da fase atual
+  closed: false,     // a forma da fase fecha no fim?
+  level: 0,          // fase atual (índice)
+  levelCount: LEVELS.length,
+  phase: "stitching",// "stitching" | "transition"
+  transT: 0,         // timer da transição entre fases
   dor: 100,          // "vida"; 0 = derrota
   score: 0,
   combo: 0,
   shake: 0,          // shake da foto do Breno
   tint: 0,           // overlay vermelho
-  woundY: 330,
-  woundX0: 250,
-  woundX1: 650,
   msg: "",
   msgT: 0,
   time: 0,
 };
 
-function startCirurgia() {
-  surg.anchors = [];
+function loadLevel(i) {
+  const L = LEVELS[i];
+  surg.level = i;
+  surg.closed = L.closed;
+  surg.anchors = L.gen().map(p => ({ x: p.x, y: p.y, done: false }));
   surg.nextIdx = 0;
   surg.stitches = [];
+  surg.combo = 0;
+  surg.phase = "stitching";
+  surg.msg = "Fase " + (i + 1) + "/" + LEVELS.length + ": " + L.nome + " — " + L.dica;
+  surg.msgT = 150;
+}
+
+function startCirurgia() {
   surg.dor = 100;
   surg.score = 0;
-  surg.combo = 0;
   surg.shake = 0;
   surg.tint = 0;
-  surg.msg = "Dê o primeiro ponto!";
-  surg.msgT = 120;
   surg.time = 0;
-
-  const N = 7; // pares de pontos ao longo do ferimento
-  for (let i = 0; i < N; i++) {
-    const x = surg.woundX0 + (surg.woundX1 - surg.woundX0) * (i / (N - 1));
-    const side = i % 2 === 0 ? -1 : 1; // alterna cima/baixo da fenda
-    surg.anchors.push({ x: x, y: surg.woundY + side * 26, done: false, side });
-  }
+  surg.transT = 0;
+  loadLevel(0); // começa na primeira fase
   // dispara a música bem no início da operação
   try { musicaCirurgia.currentTime = 0; musicaCirurgia.play().catch(() => {}); } catch (e) {}
   go(STATE.CIRURGIA);
@@ -522,6 +577,16 @@ function updateCirurgia() {
   if (surg.tint > 0) surg.tint *= 0.92;
   if (surg.msgT > 0) surg.msgT--;
 
+  // transição entre fases: sem costura, só espera e avança
+  if (surg.phase === "transition") {
+    surg.transT--;
+    if (surg.transT <= 0) {
+      if (surg.level + 1 < LEVELS.length) loadLevel(surg.level + 1);
+      else finishCirurgia(true);
+    }
+    return;
+  }
+
   if (pointer.justPressed) {
     const aim = aimPoint();
     const target = surg.anchors[surg.nextIdx];
@@ -537,11 +602,27 @@ function updateCirurgia() {
       const bonus = d < 12 ? 150 : 90; // precisão extra
       surg.score += bonus + surg.combo * 10;
       surg.msg = d < 12 ? "PERFEITO! +" + (bonus + surg.combo*10) : "Bom ponto! +" + (bonus + surg.combo*10);
-      surg.msgT = 60;
+      surg.msgT = 50;
       sfx.ok();
       surg.nextIdx++;
       if (surg.nextIdx >= surg.anchors.length) {
-        finishCirurgia(true);
+        // fecha o contorno se a forma for fechada
+        if (surg.closed) {
+          surg.stitches.push({ a: surg.anchors[surg.anchors.length - 1], b: surg.anchors[0] });
+        }
+        // recompensa por completar a fase
+        surg.dor = Math.min(100, surg.dor + 15);
+        surg.score += 300;
+        surg.combo = 0;
+        if (surg.level + 1 < LEVELS.length) {
+          surg.phase = "transition";
+          surg.transT = 100;
+          surg.msg = "✅ Fase " + (surg.level + 1) + " completa!  +300  (+15 ❤️)";
+          surg.msgT = 100;
+          sfx.win();
+        } else {
+          finishCirurgia(true);
+        }
       }
     } else {
       // errou
@@ -551,7 +632,7 @@ function updateCirurgia() {
       surg.shake = 14;
       surg.tint = 0.55;
       surg.msg = "AI! CUIDADO!  -" + dano + " ❤️";
-      surg.msgT = 60;
+      surg.msgT = 50;
       sfx.ouch();
       if (surg.dor <= 0) { surg.dor = 0; finishCirurgia(false); }
     }
@@ -598,8 +679,19 @@ function drawCirurgia() {
   const fala = surg.tint > 0.2 ? "AIIINNN!! 😖" : (surg.dor < 40 ? "tá doendo, doutor... 😣" : "confio em você 🙏");
   ctx.fillText("Breno: " + fala, W/2, 225);
 
-  // ferimento (a fenda + o buraco a mais)
-  drawWound();
+  // a bunda do Breno (duas nádegas + cofrinho)
+  drawBunda();
+
+  // guia tracejado: mostra o desenho da fase a ser costurado
+  ctx.save();
+  ctx.setLineDash([6, 7]);
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  surg.anchors.forEach((a, i) => (i ? ctx.lineTo(a.x, a.y) : ctx.moveTo(a.x, a.y)));
+  if (surg.closed) ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
 
   // pontos de ancoragem
   for (let i = 0; i < surg.anchors.length; i++) {
@@ -634,43 +726,79 @@ function drawCirurgia() {
   // HUD
   drawHUD();
 
+  // banner de transição entre fases
+  if (surg.phase === "transition") {
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#8ff0b6";
+    ctx.font = "bold 40px Trebuchet MS";
+    ctx.fillText("Próxima fase...", W/2, 500);
+    ctx.restore();
+  }
+
   // mensagem flutuante
   if (surg.msgT > 0) {
     ctx.globalAlpha = Math.min(1, surg.msgT / 30);
     ctx.textAlign = "center";
-    ctx.font = "bold 30px Trebuchet MS";
+    ctx.font = "bold 26px Trebuchet MS";
     ctx.fillStyle = surg.msg.includes("AI") ? "#ff6b6b" : "#8ff0b6";
-    ctx.fillText(surg.msg, W/2, 500);
+    ctx.fillText(surg.msg, W/2, 535);
     ctx.globalAlpha = 1;
   }
 }
 
-function drawWound() {
-  // pele
+function drawBunda() {
+  const { cx, cy, R, sep } = BUNDA;
+
+  // sombra da bunda na maca
   ctx.save();
-  ctx.fillStyle = "#d99b74";
-  roundRect(surg.woundX0 - 70, surg.woundY - 80, (surg.woundX1 - surg.woundX0) + 140, 160, 40);
-  ctx.fill();
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.beginPath(); ctx.ellipse(cx, cy + R - 6, R + sep + 6, 34, 0, 0, Math.PI*2); ctx.fill();
   ctx.restore();
 
-  // o "buraco a mais" (aberto) — clareira escura no meio
-  const grd = ctx.createRadialGradient(W/2, surg.woundY, 4, W/2, surg.woundY, 60);
-  grd.addColorStop(0, "#4a0d0d");
-  grd.addColorStop(1, "#7a1414");
-  ctx.fillStyle = grd;
-  ctx.beginPath(); ctx.ellipse(W/2, surg.woundY, 62, 26, 0, 0, Math.PI*2); ctx.fill();
-
-  // borda avermelhada da fenda entre os pontos ainda abertos
-  ctx.strokeStyle = "#a12626"; ctx.lineWidth = 5;
+  // parte de baixo das costas / lombar acima das nádegas
+  ctx.fillStyle = "#cf9068";
   ctx.beginPath();
-  ctx.moveTo(surg.woundX0, surg.woundY);
-  ctx.lineTo(surg.woundX1, surg.woundY);
-  ctx.stroke();
+  ctx.moveTo(cx - sep - R + 20, cy - 30);
+  ctx.quadraticCurveTo(cx, cy - R - 40, cx + sep + R - 20, cy - 30);
+  ctx.lineTo(cx + sep + R - 20, cy);
+  ctx.lineTo(cx - sep - R + 20, cy);
+  ctx.closePath(); ctx.fill();
 
-  // conforme fecha, a "tampa" some — feedback visual do progresso
-  const closed = surg.nextIdx / surg.anchors.length;
-  ctx.fillStyle = `rgba(217,155,116,${closed})`;
-  ctx.beginPath(); ctx.ellipse(W/2, surg.woundY, 62 * closed, 24 * closed, 0, 0, Math.PI*2); ctx.fill();
+  // as duas nádegas (esferas com sombreamento pra dar volume)
+  for (const s of [-1, 1]) {
+    const gx = cx + s * sep;
+    const g = ctx.createRadialGradient(gx - s * 30, cy - 32, 12, gx, cy, R);
+    g.addColorStop(0, "#f4bd93");
+    g.addColorStop(0.65, "#dc9d76");
+    g.addColorStop(1, "#b3764f");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(gx, cy, R, 0, Math.PI*2); ctx.fill();
+  }
+
+  // cofrinho (fenda central / intergluteal cleft)
+  ctx.save();
+  const cl = ctx.createLinearGradient(cx - 12, 0, cx + 12, 0);
+  cl.addColorStop(0,   "rgba(120,74,48,0)");
+  cl.addColorStop(0.5, "rgba(86,50,32,0.9)");
+  cl.addColorStop(1,   "rgba(120,74,48,0)");
+  ctx.fillStyle = cl;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - R + 20);
+  ctx.quadraticCurveTo(cx - 16, cy, cx, cy + R - 26);
+  ctx.quadraticCurveTo(cx + 16, cy, cx, cy - R + 20);
+  ctx.fill();
+  // sombrinha no encontro das nádegas (embaixo)
+  ctx.fillStyle = "rgba(70,40,26,0.5)";
+  ctx.beginPath(); ctx.ellipse(cx, cy + R - 34, 20, 30, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // contorno suave das nádegas
+  ctx.strokeStyle = "rgba(150,95,65,0.45)"; ctx.lineWidth = 2;
+  for (const s of [-1, 1]) {
+    ctx.beginPath(); ctx.arc(cx + s * sep, cy, R, Math.PI*0.15, Math.PI*0.85); ctx.stroke();
+  }
 }
 
 function drawNeedle(x, y) {
@@ -702,14 +830,16 @@ function drawHUD() {
   ctx.fillStyle = c;
   roundRect(30, 44, 260 * (surg.dor / 100), 22, 11); ctx.fill();
 
-  // pontos dados
+  // fase + pontos + placar
   ctx.textAlign = "right";
-  ctx.fillStyle = "#cfe3ec"; ctx.font = "bold 20px Trebuchet MS";
-  ctx.fillText("Pontos: " + surg.nextIdx + "/" + surg.anchors.length, W - 30, 34);
-  ctx.fillText("Placar: " + surg.score, W - 30, 60);
+  ctx.fillStyle = "#ffd54a"; ctx.font = "bold 20px Trebuchet MS";
+  ctx.fillText("Fase " + (surg.level + 1) + "/" + surg.levelCount + ": " + LEVELS[surg.level].nome, W - 30, 34);
+  ctx.fillStyle = "#cfe3ec"; ctx.font = "bold 18px Trebuchet MS";
+  ctx.fillText("Pontos: " + surg.nextIdx + "/" + surg.anchors.length, W - 30, 58);
+  ctx.fillText("Placar: " + surg.score, W - 30, 80);
   if (surg.combo > 1) {
     ctx.fillStyle = "#ffd54a";
-    ctx.fillText("Combo x" + surg.combo, W - 30, 86);
+    ctx.fillText("Combo x" + surg.combo, W - 30, 102);
   }
 }
 
