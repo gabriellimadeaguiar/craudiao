@@ -1,4 +1,5 @@
 import QtQuick
+import ExitLag
 
 /* Controles do protótipo: uma "orelha de livro" discreta no canto inferior esquerdo. Ao clicar, abre um painel
    pequeno para acelerar as esperas (1×, 4×, 10×), pular a etapa atual ou ir direto para qualquer tela. */

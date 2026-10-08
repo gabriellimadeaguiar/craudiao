@@ -22,10 +22,12 @@ qt_add_executable(ExitLagAnalyzer WIN32 MACOSX_BUNDLE
     src/gamescanner.cpp src/gamescanner.h
     src/platform.cpp src/platform.h
     src/perfmonitor.cpp src/perfmonitor.h
+    src/nodegeometry.cpp src/nodegeometry.h
+    src/ballgeometry.cpp src/ballgeometry.h
 )
 
 if(WIN32)
-    target_link_libraries(ExitLagAnalyzer PRIVATE iphlpapi ws2_32)
+    target_link_libraries(ExitLagAnalyzer PRIVATE iphlpapi ws2_32 dwmapi)
     # ícone do .exe (Explorer, barra de tarefas, atalhos do instalador)
     target_sources(ExitLagAnalyzer PRIVATE src/app.rc)
 endif()
@@ -38,7 +40,7 @@ foreach(f ${QML_SOURCES})
     get_filename_component(n ${f} NAME)
     set_source_files_properties(${f} PROPERTIES QT_RESOURCE_ALIAS ${n})
 endforeach()
-foreach(f atmo.vert atmo.frag glow.vert glow.frag)
+foreach(f atmo.vert atmo.frag glow.vert glow.frag nodes.vert nodes.frag route.vert route.frag)
     set_source_files_properties(qml/shaders/${f} PROPERTIES QT_RESOURCE_ALIAS shaders/${f})
 endforeach()
 
@@ -88,13 +90,17 @@ qt_add_qml_module(ExitLagAnalyzer
         qml/shaders/atmo.frag
         qml/shaders/glow.vert
         qml/shaders/glow.frag
+        qml/shaders/nodes.vert
+        qml/shaders/nodes.frag
+        qml/shaders/route.vert
+        qml/shaders/route.frag
 )
 
-# efeitos 2D (ShaderEffect) compilados para .qsb: :/shaders/round.frag.qsb
+# efeitos 2D (ShaderEffect) compilados para .qsb: :/shaders/discmask.frag.qsb
 qt_add_shaders(ExitLagAnalyzer "effects"
     PREFIX "/"
     BASE qml
-    FILES qml/shaders/round.frag qml/shaders/discmask.frag
+    FILES qml/shaders/discmask.frag
 )
 
 file(GLOB GAME_IMAGES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} resources/games/*)

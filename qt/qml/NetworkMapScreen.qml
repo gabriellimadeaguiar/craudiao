@@ -157,7 +157,7 @@ Item {
             Item { width: 18; height: 18; anchors.verticalCenter: parent.verticalCenter
                 Rectangle { anchors.fill: parent; radius: 9; color: "transparent"; border.width: 2; border.color: Theme.divider; visible: root.phase !== "done" }
                 Canvas { anchors.fill: parent; visible: root.phase !== "done"
-                    RotationAnimation on rotation { from: 0; to: 360; duration: 900; loops: Animation.Infinite; running: root.active }
+                    RotationAnimation on rotation { from: 0; to: 360; duration: 900; loops: Animation.Infinite; running: root.active && root.app.power !== "off" }
                     onPaint: { var c = getContext("2d"); c.strokeStyle = String(Theme.primary); c.lineWidth = 2; c.beginPath(); c.arc(9, 9, 8, 0, Math.PI / 2); c.stroke(); } }
                 Icon { anchors.centerIn: parent; name: "check"; size: 18; color: Theme.success; visible: root.phase === "done" } }
             Column { anchors.verticalCenter: parent.verticalCenter

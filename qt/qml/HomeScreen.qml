@@ -25,7 +25,7 @@ Item {
     // servidor: "Automatic" fica com a região de menor ping (medido; antes disso, a estimativa pela distância)
     property bool autoRegion: true
     property string chosenRegion: ""
-    readonly property string region: autoRegion || !chosenRegion ? pings.best() : chosenRegion
+    readonly property string region: autoRegion || !chosenRegion ? (pings.bestId || L.nearestRegion(gid, app.origin)) : chosenRegion
     readonly property var reg: L.REGIONS[region] || L.REGIONS.br
     readonly property real distance: L.km(app.origin, [reg.lat, reg.lon])
     property var optimized: ({})              // { gameId: otimizado desde (ms) }
@@ -160,6 +160,7 @@ Item {
             optimized: root.optimized
             exitlagOn: root.app.exitlagOn
             panelOpen: root.panelOpen
+            power: root.app.power
             onPicked: function (id) {
                 if (id === root.gid && root.panelOpen) root.panelOpen = false;
                 else { if (id !== root.gid) root.select(id); root.panelOpen = true; }

@@ -1,4 +1,5 @@
 #include <QDir>
+#include <QFile>
 #include <QFontDatabase>
 #include <QGuiApplication>
 #include <QIcon>
@@ -7,6 +8,7 @@
 #include <QSurfaceFormat>
 #include <QImage>
 #include <QTimer>
+#include <QStandardPaths>
 
 #include "perfmonitor.h"
 
@@ -15,9 +17,20 @@ int main(int argc, char *argv[])
     PerfMonitor::markProcessStart();
     // profundidade, stencil e MSAA para o Qt Quick (no Windows o Qt usa Direct3D 11 por padrão)
     QSurfaceFormat fmt = QSurfaceFormat::defaultFormat();
-    fmt.setDepthBufferSize(24); fmt.setStencilBufferSize(8); fmt.setSamples(4);
-    fmt.setAlphaBufferSize(8);   // janela transparente fora dos cantos arredondados
+    fmt.setDepthBufferSize(24); fmt.setStencilBufferSize(8); fmt.setSamples(qEnvironmentVariableIsSet("EXL_WINMSAA0") ? 0 : 4);
     QSurfaceFormat::setDefaultFormat(fmt);
+    // cache em disco dos pipelines gráficos (shaders já compilados para a GPU): a partir da segunda abertura o
+    // primeiro quadro não espera a compilação. Qt 6.5+ (no Windows, Qt 6.8); versões antigas ignoram.
+    QCoreApplication::setOrganizationName(QStringLiteral("ExitLag"));
+    QCoreApplication::setApplicationName(QStringLiteral("ExitLag Analyzer"));
+    if (!qEnvironmentVariableIsSet("QSG_RHI_PIPELINE_CACHE_SAVE")) {
+        const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+        if (!dir.isEmpty() && QDir().mkpath(dir)) {
+            const QByteArray file = QDir(dir).filePath(QStringLiteral("pipelines.cache")).toLocal8Bit();
+            qputenv("QSG_RHI_PIPELINE_CACHE_SAVE", file);
+            if (QFile::exists(QString::fromLocal8Bit(file))) qputenv("QSG_RHI_PIPELINE_CACHE_LOAD", file);
+        }
+    }
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("ExitLag Analyzer"));
     QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/app.png")));

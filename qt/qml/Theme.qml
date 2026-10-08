@@ -62,7 +62,6 @@ QtObject {
     readonly property int d300: 300
     readonly property int d500: 500
     readonly property int d900: 900
-    readonly property int windowRadius: 12          // cantos da janela do app (sem moldura)
     readonly property var easeStandard: [0.2, 0, 0, 1, 1, 1]
     readonly property var easeDecelerate: [0, 0, 0, 1, 1, 1]
     readonly property var easeAccelerate: [0.3, 0, 1, 1, 1, 1]

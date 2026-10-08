@@ -13,7 +13,14 @@ QtObject {
     property bool running: false
     readonly property int samples: 5
 
-    function measure() { measured = ({}); running = false; running = true; }
+    // região "Automatic": decidida pela estimativa ao começar e trocada uma vez só, quando a medição termina
+    // (antes trocava a cada resposta que chegava, e cada troca redesenhava as rotas no globo)
+    property string bestId: ""
+    property int pending: 0
+    function measure() { measured = ({}); pending = regions.length; bestId = best(); running = false; running = true; settle.restart(); }
+    function done(id) { if (--pending <= 0) { settle.stop(); bestId = best(); } }
+    property Timer settle: Timer { interval: 4000; onTriggered: root.bestId = root.best() }   // quem não respondeu fica de fora
+    onRegionsChanged: bestId = best()
 
     // ms de uma região: medido quando há, senão a estimativa pela distância
     function ms(id) {
@@ -45,6 +52,7 @@ QtObject {
                         var s = got.slice().sort(function (a, b) { return a - b; });
                         var m = Object.assign({}, root.measured); m[modelData] = s[Math.floor(s.length / 2)]; root.measured = m;
                     }
+                    root.done(modelData);
                 }
             }
             property int misses: 0

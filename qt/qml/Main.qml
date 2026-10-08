@@ -11,7 +11,7 @@ Window {
     width: 1440; height: 810
     minimumWidth: 1024; minimumHeight: 576
     visible: true
-    color: "transparent"                 // cantos arredondados: o que fica fora do recorte é transparente
+    color: Theme.stage                   // janela opaca: cantos arredondados vêm do Windows 11 (DWM), sem custo de desenho
     flags: Qt.Window | Qt.FramelessWindowHint
     title: "ExitLag"
 
@@ -29,6 +29,11 @@ Window {
         property string offer: "trial"
         property string loginMode: "signup"
         property bool loggedIn: false
+        // economia de energia: full (em foco), low (visível sem foco), off (minimizada ou escondida)
+        readonly property string power: Platform.forcedPower !== "" ? Platform.forcedPower : !win.visible || win.visibility === Window.Minimized || win.visibility === Window.Hidden ? "off"
+                                       : win.active ? "full" : "low"
+        onPowerChanged: Platform.log("power: " + power)
+
         // home
         property bool exitlagOn: true
         property bool netDown: false
@@ -89,13 +94,6 @@ Window {
     Item {
         id: frame
         anchors.fill: parent
-        readonly property real radius: win.visibility === Window.Maximized || win.visibility === Window.FullScreen ? 0 : Theme.windowRadius
-        layer.enabled: radius > 0 && !Platform.flag("NOROUND")
-        layer.effect: ShaderEffect {
-            property vector2d size: Qt.vector2d(frame.width, frame.height)
-            property real radius: frame.radius
-            fragmentShader: "qrc:/shaders/round.frag.qsb"
-        }
         Rectangle { anchors.fill: parent; color: Theme.stage }
 
     Item {
@@ -107,7 +105,7 @@ Window {
 
         Rectangle { anchors.fill: parent; gradient: Gradient { GradientStop { position: 0; color: "#10131a" } GradientStop { position: 0.6; color: Theme.surface } } }
 
-        Globe { id: globe; anchors.fill: parent; interactive: app.scene === "home" || app.scene === "entry" || app.scene === "netmap"; opacity: app.scene === "results" || (app.scene === "analysis" && !analysis.netOn) ? 0 : app.scene === "signup" ? 0.45 : 1
+        Globe { id: globe; anchors.fill: parent; power: app.power; interactive: app.scene === "home" || app.scene === "entry" || app.scene === "netmap"; opacity: app.scene === "results" || (app.scene === "analysis" && !analysis.netOn) ? 0 : app.scene === "signup" ? 0.45 : 1
             Behavior on opacity { NumberAnimation { duration: 900 } } }
 
         EntryScreen { id: entry; anchors.fill: parent; app: app; globe: globe; active: app.scene === "entry" }
@@ -149,6 +147,7 @@ Window {
 
     Component.onCompleted: {
         scanner.scan();
+        Platform.roundCorners(win);
         app.locate();
         Perf.attach(win);
         Perf.tag = app.scene;

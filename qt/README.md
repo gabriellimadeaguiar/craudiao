@@ -56,3 +56,35 @@ Opções úteis para testar:
 - `src/`: C++. Contém as geometrias do globo (`LandGeometry`, `StarGeometry`, `RouteGeometry`), as sondas (`HardwareProbe`, `LatencyProbe`, `TraceRoute`), o `GameScanner` e o `Platform`.
 - `qml/`: telas e componentes. `Logic.js` reúne as regras de diagnóstico e `Theme.qml` traz os tokens do Design System.
 - `resources/`: fontes (Anek Latin, Ubuntu Sans), capas dos jogos e os pontos de terra do globo.
+
+## Desempenho
+
+O app mede o próprio desempenho: quadros por segundo, pior quadro, CPU (processo e thread da interface), memória e
+tempo até o primeiro quadro. Os números aparecem nos controles do protótipo (orelha no canto inferior esquerdo) e,
+com `--perf`, uma linha por segundo vai para o console e para `perf.log` na pasta temporária
+(`--perf=<arquivo>` escolhe outro lugar; `--quit-after=<ms>` fecha sozinho; `--power=full|low|off` força o modo de
+energia). O build do Windows roda esse teste em quatro telas e publica os logs no artefato `perf-logs`.
+
+Economia de energia, para não disputar recursos com o jogo:
+
+| Janela | Animações | Desenho |
+|---|---|---|
+| Em foco | a cada quadro da tela | contínuo enquanto o globo gira |
+| Visível, sem foco | 15 passos por segundo; simulações a 2 Hz | ~15 quadros por segundo |
+| Minimizada ou escondida | paradas | nenhum (só o necessário para os números medidos) |
+
+Escolhas que mais pesaram (medidas com renderização por software, que exagera o custo de desenho):
+
+- Pontos da rede no globo numa malha só, com a piscada no shader (antes, 140 esferas com binding por quadro): 1,8×.
+- Globo desenhado no mesmo passo do 2D (`View3D.Inline`), sem textura intermediária com MSAA próprio: 1,9×.
+- Cantos arredondados pelo próprio Windows 11 (DWM), sem camada na janela inteira: 1,7×.
+- Pacotes das rotas e desenho progressivo no shader da rota (antes, esferas com três bindings por quadro), malha
+  montada uma vez: 1,4×.
+- Rotas e etiquetas em `ListModel`: acrescentar uma não recria as outras.
+- Animações infinitas só rodam visíveis e com a janela ativa; valores que perseguem um destino encaixam ao chegar,
+  para não manter quadros sendo pedidos à toa.
+- Cache em disco dos pipelines gráficos (`pipelines.cache`), para abrir mais rápido a partir da segunda vez.
+- Pacote sem o OpenGL por software (`opengl32sw.dll`, ~20 MB) e sem plugins de imagem que o app não usa.
+
+Variáveis `EXL_*` desligam partes do globo para medir o custo de cada uma (`EXL_NONODES`, `EXL_NOLAND`,
+`EXL_NOSTARS`, `EXL_NOATMO`, `EXL_NOGLOW`, `EXL_NOAA`, `EXL_OFFSCREEN`, `EXL_WINMSAA0`).

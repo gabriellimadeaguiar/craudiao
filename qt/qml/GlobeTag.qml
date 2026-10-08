@@ -23,9 +23,9 @@ Rectangle {
     x: p.x + offsetX - width / 2
     y: below ? p.y + 12 : p.y - height - 12
     width: row.implicitWidth + 16; height: 24; radius: 4
-    color: "#e6111317"
+    color: Theme.glassStrong
     border.width: kind === "bad" ? 1 : 0
-    border.color: "#66f52929"
+    border.color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.4)
     opacity: front && !hidden ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: 200 } }
     Row {

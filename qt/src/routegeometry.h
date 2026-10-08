@@ -4,7 +4,8 @@
 #include <QtQml/qqmlregistration.h>
 
 // Rota sobre o globo: uma corrente de saltos (arcos que saem e pousam tangentes à superfície) entre as paradas,
-// suavizada e transformada num tubo. `progress` desenha a rota do início até aquele ponto (0–1).
+// suavizada e transformada num tubo. A malha leva o comprimento acumulado (u, 0–1) em cada vértice: o shader da rota
+// usa u para desenhar só até `progress` e para correr os pacotes, sem refazer a malha a cada quadro.
 // Mesma construção das rotas do protótipo web (arcHop + soften).
 class RouteGeometry : public QQuick3DGeometry
 {

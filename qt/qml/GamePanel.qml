@@ -50,7 +50,8 @@ Rectangle {
     Keys.onEscapePressed: root.close()
 
     /* ---------- simulação das rotas ExitLag (10 Hz) ---------- */
-    property var samples: []                 // [{ v, lost }] valor da rota que chega primeiro
+    property var samples: []                 // [{ v, lost }] valor da rota que chega primeiro (publicado a 4 Hz)
+    property var raw: []                     // amostras a 10 Hz, internas (sem bindings)
     property var ema: []                     // ms suavizado por rota
     property var laneLost: []
     property int fastest: 0
@@ -70,7 +71,7 @@ Rectangle {
         log = a.slice(0, 4);
     }
     function resetSim(rebuilt) {
-        samples = []; ema = []; laneLost = []; fastest = 0; t = 0;
+        samples = []; raw = []; stats = null; ema = []; laneLost = []; fastest = 0; t = 0;
         fail = ({ lane: -1, t0: 0 });
         nextFail = (rebuilt ? 5 : 6) + Math.random() * 4;
     }
@@ -104,10 +105,12 @@ Rectangle {
     }
 
     Timer {
-        interval: 100; repeat: true; running: root.isOn && root.visible
+        // simulação a 10 Hz em foco, 2 Hz sem foco, parada com a janela minimizada
+        interval: root.app && root.app.power === "low" ? 500 : 100; repeat: true
+        running: root.isOn && root.visible && !(root.app && root.app.power === "off")
         property int k: 0
         onTriggered: {
-            var R = root, dt = 0.1 * (R.app ? R.app.speed : 1);
+            var R = root, dt = interval / 1000 * (R.app ? R.app.speed : 1);
             R.t += dt;
             // falha de uma rota: começa, segura 3 s e volta; a próxima vem 8 a 14 s depois
             if (R.fail.lane < 0 && R.t >= R.nextFail) {
@@ -127,9 +130,12 @@ Rectangle {
                 vals.push(v); lost.push(ls);
                 if (!ls && v < best) best = v;
             }
-            R.samples = R.samples.concat([{ v: isFinite(best) ? best : 0, lost: !isFinite(best) }]).slice(-140);
-            // números da tela a 4 Hz, suavizados
-            if (++k % 2 === 0) {
+            R.raw.push({ v: isFinite(best) ? best : 0, lost: !isFinite(best) });
+            if (R.raw.length > 140) R.raw.shift();
+            // tela (números, linha do tempo) a ~4 Hz: menos bindings e menos redesenho
+            if (++k % 2 === 0 || interval > 100) {
+                R.samples = R.raw.slice();
+                R.stats = R.computeStats(R.raw);
                 var e = R.ema.slice();
                 for (var j = 0; j < R.lanes; j++) e[j] = e[j] === undefined ? vals[j] : 0.7 * e[j] + 0.3 * vals[j];
                 R.ema = e; R.laneLost = lost;
@@ -141,8 +147,9 @@ Rectangle {
             }
         }
     }
-    readonly property var stats: {
-        var s = samples, ok = s.filter(function (x) { return !x.lost; });
+    property var stats: null
+    function computeStats(s) {
+        var ok = s.filter(function (x) { return !x.lost; });
         if (!ok.length) return null;
         var last = ok.slice(-6), ping = last.reduce(function (a, b) { return a + b.v; }, 0) / last.length;
         var w = ok.slice(-40), jit = 0;
@@ -153,7 +160,7 @@ Rectangle {
     }
     // relógio do "Stop"
     property real now: Date.now()
-    Timer { interval: 250; repeat: true; running: root.isOn && root.visible; onTriggered: root.now = Date.now() }
+    Timer { interval: root.app && root.app.power === "low" ? 1000 : 250; repeat: true; running: root.isOn && root.visible && !(root.app && root.app.power === "off"); onTriggered: root.now = Date.now() }
     function elapsed() {
         var s = Math.max(0, Math.floor((now - since) / 1000)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60;
         var p = function (x) { return (x < 10 ? "0" : "") + x; };
@@ -281,7 +288,7 @@ Rectangle {
                         Rectangle {
                             x: 8; anchors.verticalCenter: parent.verticalCenter; width: 6; height: 6; radius: 3
                             color: !root.isOn ? Theme.stroke : chip.bad ? Theme.criticalText : Theme.success
-                            SequentialAnimation on opacity { running: chip.bad; loops: Animation.Infinite; NumberAnimation { to: 0.2; duration: 500 } NumberAnimation { to: 1; duration: 500 } }
+                            SequentialAnimation on opacity { running: chip.bad && root.app && root.app.power === "full"; loops: Animation.Infinite; NumberAnimation { to: 0.2; duration: 500 } NumberAnimation { to: 1; duration: 500 } }
                         }
                         Txt { x: 20; anchors.verticalCenter: parent.verticalCenter; role: "small"; font.weight: Font.Medium
                               color: chip.fast ? Theme.success : chip.bad ? Theme.criticalText : root.isOn ? Theme.textMain : Theme.textVariant; text: "Route " + (chip.index + 1) }
@@ -338,8 +345,8 @@ Rectangle {
                 id: lc; width: parent.width
                 ServerRow {
                     width: list.width; sel: root.auto
-                    icon: "auto"; name: "Automatic"; city: "Best route · " + (L.REGIONS[root.pings ? root.pings.best() : root.region] || root.reg).name
-                    ms: root.pings ? root.pings.ms(root.pings.best()) : 0; measured: root.pings ? root.pings.isMeasured(root.pings.best()) : false
+                    icon: "auto"; name: "Automatic"; city: "Best route · " + (L.REGIONS[root.pings && root.pings.bestId ? root.pings.bestId : root.region] || root.reg).name
+                    ms: root.pings ? root.pings.ms(root.pings.bestId || root.region) : 0; measured: root.pings ? root.pings.isMeasured(root.pings.bestId || root.region) : false
                     onPicked: { list.open = false; root.pickRegion("auto"); }
                 }
                 Rectangle { width: list.width; height: 1; color: Theme.divider }

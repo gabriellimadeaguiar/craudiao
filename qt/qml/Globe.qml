@@ -27,8 +27,10 @@ Item {
     property bool interactive: true     // arrastar para girar, roda para aproximar
     property bool offline: false        // ExitLag desligada: o globo fica num laranja sutil
     property real time: 0
-    property var routes: []             // [{ id, group, stops: [[lat, lon]...], color, tube, lift, speed, packets }]
-    property var tags: []               // [{ lat, lon, text, sub, kind: you|server|bad|node|cont, below }]
+    // rotas e etiquetas em ListModel: acrescentar uma não recria as outras (com um array, cada addRoute refazia
+    // todos os modelos 3D). Cada item guarda o objeto em JSON.
+    ListModel { id: routesModel }   // { group, stops: [[lat, lon]...], color, tube, lift, speed, packets }
+    ListModel { id: tagsModel }     // { lat, lon, text, sub, kind: you|server|bad|node|cont, below }
     property var groupsShown: ({})
     property var groupsGain: ({})
     property real nodesOpacity: offline ? 0.08 : 0.35
@@ -63,12 +65,19 @@ Item {
         dist = d || 6.45;
         spinTimer.interval = 1800; spinTimer.restart();
     }
-    function clear() { routes = []; tags = []; groupsShown = ({}); groupsGain = ({}); }
+    function clear() { routesModel.clear(); tagsModel.clear(); groupsShown = ({}); groupsGain = ({}); }
     function show(group, on) { var g = Object.assign({}, groupsShown); g[group] = on; groupsShown = g; }
     function gain(group, k) { var g = Object.assign({}, groupsGain); g[group] = k; groupsGain = g; }
-    function addRoute(r) { routes = routes.concat([r]); }
-    function addTag(t) { tags = tags.concat([t]); return tags.length - 1; }
-    function setTag(i, patch) { var a = tags.slice(); a[i] = Object.assign({}, a[i], patch); tags = a; }
+    function addRoute(r) {
+        var o = Object.assign({}, r);
+        if (o.color !== undefined) o.color = String(o.color);   // cor do QML vira "#rrggbb" para caber no JSON
+        routesModel.append({ json: JSON.stringify(o) });
+    }
+    function addTag(t) { tagsModel.append({ json: JSON.stringify(t) }); return tagsModel.count - 1; }
+    function setTag(i, patch) {
+        if (i < 0 || i >= tagsModel.count) return;
+        tagsModel.setProperty(i, "json", JSON.stringify(Object.assign(JSON.parse(tagsModel.get(i).json), patch)));
+    }
     // anel verde que sai da borda do globo, uma vez (ligar a ExitLag)
     // flash verde: sobe em 0,35 s e apaga em 1,6 s, com o anel saindo da borda
     function celebrate() { flashAnim.restart(); pulse(Theme.success); }
@@ -96,10 +105,20 @@ Item {
     property real velLon: 0
     property bool dragging: false
 
+    /* Ritmo das animações conforme o uso (economia de energia enquanto a pessoa joga):
+       full: janela em foco, um passo por quadro da tela; low: visível sem foco, 15 passos por segundo;
+       off: minimizada ou escondida, parado (o Qt também deixa de desenhar). */
+    property string power: "full"
     FrameAnimation {
-        running: globe.visible
-        onTriggered: {
-            var dt = Math.min(frameTime, 0.05);
+        running: globe.visible && globe.power === "full"
+        onTriggered: globe.step(Math.min(frameTime, 0.05))
+    }
+    Timer {
+        interval: 66; repeat: true
+        running: globe.visible && globe.power === "low"
+        onTriggered: globe.step(0.066)
+    }
+    function step(dt) {
             globe.time += dt;
             if (!globe.dragging) {
                 // solta o globo com a velocidade do arrasto e deixa parar devagar
@@ -117,9 +136,10 @@ Item {
             var kd = 1 - Math.exp(-dt * 2.0);
             globe.curLat += (globe.lat - globe.curLat) * kr;
             globe.curLon += (globe.lon - globe.curLon) * kr;
-            globe.curDist += (globe.dist - globe.curDist) * kd;
-            globe.curShift += (globe.shiftX - globe.curShift) * kd;
-        }
+            // perto do destino, encaixa: o valor para de mudar e quem depende dele (órbita, etiquetas) também para
+            var dd = globe.dist - globe.curDist, ds = globe.shiftX - globe.curShift;
+            if (Math.abs(dd) > 0.0005) globe.curDist += dd * kd; else if (dd !== 0) globe.curDist = globe.dist;
+            if (Math.abs(ds) > 0.05) globe.curShift += ds * kd; else if (ds !== 0) globe.curShift = globe.shiftX;
     }
 
     // arrastar gira (com inércia), roda aproxima; o cursor vira mão aberta sobre o planeta
@@ -183,13 +203,16 @@ Item {
         id: view
         x: globe.curShift
         width: parent.width; height: parent.height
-        renderMode: View3D.Offscreen
+        // Inline: desenha o 3D no mesmo passo do 2D (com o MSAA da janela), sem textura intermediária.
+        // Medido: ~2× mais quadros que Offscreen com MSAA próprio, mesmo resultado visual.
+        renderMode: Platform.flag("OFFSCREEN") ? View3D.Offscreen : View3D.Inline
         environment: SceneEnvironment {
             backgroundMode: SceneEnvironment.Transparent
             antialiasingMode: Platform.flag("NOAA") ? SceneEnvironment.NoAA : SceneEnvironment.MSAA
             antialiasingQuality: SceneEnvironment.High
         }
         camera: cam
+        BallGeometry { id: ballGeo }
         PerspectiveCamera { id: cam; z: globe.curDist * globe.radius; fieldOfView: 30; clipNear: 5; clipFar: 9000 }
 
         // céu
@@ -222,25 +245,26 @@ Item {
                     geometry: LandGeometry { id: land; radius: globe.radius; dotSize: globe.dist < 4.6 ? 0.22 : 0.34 }
                     materials: DefaultMaterial { lighting: DefaultMaterial.NoLighting; diffuseColor: globe.landColor; opacity: 0.85 }
                 }
-                // rede ExitLag ao fundo: pontos verdes discretos piscando
-                Repeater3D {
-                    model: Platform.flag("NONODES") ? 0 : land.randomLandPoints(140, 7)
-                    delegate: Model {
-                        required property var modelData
-                        required property int index
-                        source: "#Sphere"
-                        position: globe.vec(modelData[0], modelData[1], globe.radius * 1.006)
-                        scale: Qt.vector3d(0.01, 0.01, 0.01)
-                        materials: DefaultMaterial {
-                            lighting: DefaultMaterial.NoLighting; diffuseColor: Theme.success
-                            opacity: globe.nodesOpacity * (0.45 + 0.55 * Math.abs(Math.sin(globe.time * 1.3 + index * 1.7)))
-                        }
+                // rede ExitLag ao fundo: pontos verdes discretos piscando (uma malha só; a piscada é do shader)
+                Model {
+                    visible: !Platform.flag("NONODES")
+                    geometry: NodeGeometry { points: land.randomLandPoints(140, 7); radius: globe.radius * 1.006 }
+                    materials: CustomMaterial {
+                        shadingMode: CustomMaterial.Unshaded
+                        sourceBlend: CustomMaterial.One
+                        destinationBlend: CustomMaterial.OneMinusSrcAlpha
+                        property real uTime: globe.time
+                        property real baseOpacity: globe.nodesOpacity
+                        property color nodeColor: Theme.success
+                        vertexShader: "shaders/nodes.vert"
+                        fragmentShader: "shaders/nodes.frag"
                     }
                 }
                 Repeater3D {
-                    model: globe.routes
+                    model: routesModel
                     delegate: RouteModel {
-                        required property var modelData
+                        required property string json
+                        readonly property var modelData: JSON.parse(json)
                         globeItem: globe
                         stops: modelData.stops
                         color: modelData.color || Theme.success
@@ -254,20 +278,21 @@ Item {
                 }
                 Repeater3D {
                     id: markers
-                    model: globe.tags
+                    model: tagsModel
                     delegate: Node {
-                        required property var modelData
+                        required property string json
+                        readonly property var modelData: JSON.parse(json)
                         position: globe.vec(modelData.lat, modelData.lon, globe.radius * 1.008)
                         readonly property color c: modelData.kind === "you" ? Theme.textMain : modelData.kind === "bad" ? Theme.primary : modelData.kind === "server" || modelData.kind === "node" ? Theme.success : Theme.textMain
                         readonly property real s: modelData.kind === "node" || modelData.kind === "cont" ? 0.011 : 0.018
                         Model {
-                            source: "#Sphere"; scale: Qt.vector3d(parent.s, parent.s, parent.s)
+                            geometry: ballGeo; scale: Qt.vector3d(parent.s, parent.s, parent.s)
                             materials: DefaultMaterial { lighting: DefaultMaterial.NoLighting; diffuseColor: parent.parent.c }
                         }
                         // anel que pulsa em volta do ponto
                         Model {
                             visible: modelData.kind !== "node" && modelData.kind !== "cont"
-                            source: "#Sphere"
+                            geometry: ballGeo
                             property real k: (globe.time * 0.6) % 1
                             scale: Qt.vector3d(parent.s * (1 + k * 3), parent.s * (1 + k * 3), parent.s * (1 + k * 3))
                             materials: DefaultMaterial { lighting: DefaultMaterial.NoLighting; diffuseColor: parent.parent.c; opacity: 0.35 * (1 - parent.k) }
@@ -299,9 +324,10 @@ Item {
 
     // etiquetas 2D presas aos marcadores
     Repeater {
-        model: globe.tags
+        model: tagsModel
         delegate: GlobeTag {
-            required property var modelData
+            required property string json
+            readonly property var modelData: JSON.parse(json)
             required property int index
             repeater: markers
             tagIndex: index

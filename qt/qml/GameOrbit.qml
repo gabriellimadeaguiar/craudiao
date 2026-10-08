@@ -64,10 +64,23 @@ Item {
         onHoveredChanged: if (!hovered) root.setOpen(false)
     }
 
+    // roda só em foco e enquanto algo se mexe: aberta (gira), molas em movimento ou o mouse num ícone
+    property string power: "full"
+    property bool settled: false
+    readonly property bool needsTicks: root.visible && root.n > 0 && (root.open || !root.settled || root.hoveredId !== "")
     FrameAnimation {
-        running: root.visible && root.n > 0
+        running: root.needsTicks && root.power === "full"
         onTriggered: root.tick(Math.min(frameTime, 0.05))
     }
+    // sem foco: 15 passos por segundo, só até assentar
+    Timer {
+        interval: 66; repeat: true
+        running: root.needsTicks && root.power === "low"
+        onTriggered: root.tick(0.066)
+    }
+    onSelectedChanged: settled = false
+    onCxChanged: settled = false
+    onCyChanged: settled = false
 
     function wrap(a) { return ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; }
 
@@ -81,6 +94,8 @@ Item {
         else a8 += wrap(Math.PI / 2 - selIndex * step - a8) * (1 - Math.exp(-5 * dt));
         var e = e0 + (1 - e0) * r9;
 
+        var moving = Math.abs(r9v) > 0.002 || Math.abs(r9 - (open ? 1 : 0)) > 0.002
+                  || (!open && Math.abs(wrap(Math.PI / 2 - selIndex * step - a8)) > 0.0005);
         for (var i = 0; i < n; i++) {
             var it = rep.itemAt(i); if (!it) continue;
             var s = st[i], sel = i === selIndex, hovered = ids[i] === hoveredId;
@@ -88,6 +103,7 @@ Item {
             if (clock >= s.start || sel) { s.pv += ((tg - s.p) * 95 - s.pv * 15) * dt; s.p = Math.max(0, s.p + s.pv * dt); }
             s.hv += (((hovered ? 1 : 0) - s.h) * 260 - s.hv * 24) * dt; s.h += s.hv * dt;
 
+            if (Math.abs(s.pv) > 0.002 || Math.abs(s.hv) > 0.002 || clock < s.start) moving = true;
             var p = s.p;
             var a = a8 + i * step - (1 - Math.min(1, p)) * 0.55;
             var sn = Math.sin(a), yr = sn < 0 ? Math.min(ry, gp - 14) : ry;
@@ -110,6 +126,7 @@ Item {
             it.maskCenter = Qt.point((cx - x) / sc + 32, (cy - y) / sc + 32);
             it.maskRadius = (gp - 2) / sc;
         }
+        settled = !moving;
         // nome sob o selecionado (ou sob o item com o mouse)
         var li = hoveredId !== "" ? ids.indexOf(hoveredId) : selIndex, lt = rep.itemAt(li);
         if (lt) { label.x = lt.x + 32 - label.width / 2; label.y = lt.y + 32 + 32 * lt.scale + 8; label.text = L.CATALOG[ids[li]] ? L.CATALOG[ids[li]].name : ""; }
@@ -156,7 +173,7 @@ Item {
                 color: root.exitlagOn ? Theme.success : Theme.stroke
                 border.width: 2; border.color: "#b3050608"
                 SequentialAnimation on opacity {
-                    running: parent.visible && root.exitlagOn; loops: Animation.Infinite
+                    running: parent.visible && root.exitlagOn && root.power === "full"; loops: Animation.Infinite
                     NumberAnimation { to: 0.25; duration: 800; easing.type: Easing.InOutSine }
                     NumberAnimation { to: 1; duration: 800; easing.type: Easing.InOutSine }
                 }

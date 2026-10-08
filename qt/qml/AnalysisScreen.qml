@@ -223,7 +223,7 @@ Item {
             readonly property bool done: root.phase !== "hw"
             Rectangle {
                 anchors.centerIn: parent; width: 420; height: 420; radius: 210; color: "transparent"
-                SequentialAnimation on scale { loops: Animation.Infinite; NumberAnimation { to: 1.06; duration: 1200; easing.type: Easing.InOutSine } NumberAnimation { to: 1; duration: 1200; easing.type: Easing.InOutSine } }
+                SequentialAnimation on scale { loops: Animation.Infinite; running: root.active && root.app.power !== "off"; NumberAnimation { to: 1.06; duration: 1200; easing.type: Easing.InOutSine } NumberAnimation { to: 1; duration: 1200; easing.type: Easing.InOutSine } }
                 Canvas { id: glowCv; anchors.fill: parent; onPaint: { var c = getContext("2d"); c.reset(); var g = c.createRadialGradient(210, 210, 0, 210, 210, 210);
                     g.addColorStop(0, core.done ? "#14ebeced" : "#1ff52929"); g.addColorStop(0.7, "#00000000"); c.fillStyle = g; c.fillRect(0, 0, 420, 420); }
                     Connections { target: core; function onDoneChanged() { glowCv.requestPaint(); } } }
@@ -239,7 +239,7 @@ Item {
                 id: sweep
                 anchors.fill: parent
                 visible: !core.done
-                RotationAnimation on rotation { from: 0; to: 360; duration: 2200; loops: Animation.Infinite; running: !core.done && root.active }
+                RotationAnimation on rotation { from: 0; to: 360; duration: 2200; loops: Animation.Infinite; running: !core.done && root.active && root.app.power !== "off" }
                 onPaint: { var c = getContext("2d"), cx = 150; var g = c.createConicalGradient(cx, cx, 0);
                     g.addColorStop(0, "#f52929"); g.addColorStop(0.03, "#40f52929"); g.addColorStop(0.22, "#00f52929"); g.addColorStop(1, "#00f52929");
                     c.strokeStyle = g; c.lineWidth = 2; c.beginPath(); c.arc(cx, cx, 149, 0, Math.PI * 2); c.stroke(); }
@@ -376,7 +376,7 @@ Item {
         Txt { role: "small"; text: root.tickL; anchors.verticalCenter: parent.verticalCenter }
         Txt { role: "mono"; text: root.tickV; anchors.verticalCenter: parent.verticalCenter }
         Rectangle { width: 8; height: 16; color: Theme.primary; anchors.verticalCenter: parent.verticalCenter
-            SequentialAnimation on opacity { loops: Animation.Infinite; PropertyAction { value: 1 } PauseAnimation { duration: 450 } PropertyAction { value: 0 } PauseAnimation { duration: 450 } } }
+            SequentialAnimation on opacity { loops: Animation.Infinite; running: root.active && root.app.power !== "off"; PropertyAction { value: 1 } PauseAnimation { duration: 450 } PropertyAction { value: 0 } PauseAnimation { duration: 450 } } }
         ParallelAnimation { id: tickerAnim
             NumberAnimation { target: ticker; property: "opacity"; from: 0; to: 1; duration: 380 }
             NumberAnimation { target: ticker; property: "anchors.bottomMargin"; from: 40; to: 48; duration: 380; easing.type: Easing.OutCubic } }

@@ -15,11 +15,12 @@ void RouteGeometry::setStops(const QVariantList &s) { m_stops = s; buildPath(); 
 void RouteGeometry::setGlobeRadius(float r) { if (qFuzzyCompare(r, m_R)) return; m_R = r; buildPath(); rebuildMesh(); emit changed(); }
 void RouteGeometry::setTubeRadius(float r) { if (qFuzzyCompare(r, m_tube)) return; m_tube = r; rebuildMesh(); emit changed(); }
 void RouteGeometry::setLift(float l) { if (qFuzzyCompare(l, m_lift)) return; m_lift = l; buildPath(); rebuildMesh(); emit changed(); }
+// o progresso não refaz a malha: o shader corta a rota pela coordenada u (comprimento 0–1) de cada vértice
 void RouteGeometry::setProgress(float p)
 {
     p = std::clamp(p, 0.f, 1.f);
     if (qFuzzyCompare(p + 1.f, m_progress + 1.f)) return;
-    m_progress = p; rebuildMesh(); emit progressChanged();
+    m_progress = p; emit progressChanged();
 }
 
 static QVector3D slerpUnit(const QVector3D &a, const QVector3D &b, float u)
@@ -96,16 +97,12 @@ void RouteGeometry::rebuildMesh()
 {
     clear();
     const int n = m_pts.size();
-    if (n < 2 || m_progress <= 0.001f) { update(); return; }
-    // corta a polilinha no progresso atual
-    QList<QVector3D> pts;
-    for (int i = 0; i < n; ++i) {
-        if (m_cum[i] <= m_progress) pts.append(m_pts[i]);
-        else { pts.append(pointAt(m_progress)); break; }
-    }
-    if (pts.size() < 2) { update(); return; }
+    if (n < 2) { update(); return; }
+    // malha inteira, montada uma vez; por vértice: posição, normal e u (comprimento acumulado 0–1)
+    const QList<QVector3D> &pts = m_pts;
     const int sides = 8, rings = pts.size();
-    QByteArray vbuf(rings * sides * 6 * int(sizeof(float)), Qt::Uninitialized);
+    constexpr int floats = 8;
+    QByteArray vbuf(rings * sides * floats * int(sizeof(float)), Qt::Uninitialized);
     QByteArray ibuf((rings - 1) * sides * 6 * int(sizeof(quint32)), Qt::Uninitialized);
     auto *v = reinterpret_cast<float *>(vbuf.data());
     auto *ix = reinterpret_cast<quint32 *>(ibuf.data());
@@ -126,6 +123,7 @@ void RouteGeometry::rebuildMesh()
             const QVector3D d = nrm * std::cos(a) + bin * std::sin(a);
             const QVector3D p = pts[i] + d * m_tube * taper;
             *v++ = p.x(); *v++ = p.y(); *v++ = p.z(); *v++ = d.x(); *v++ = d.y(); *v++ = d.z();
+            *v++ = m_cum[i]; *v++ = 0;
         }
     }
     for (int i = 0; i < rings - 1; ++i)
@@ -136,10 +134,11 @@ void RouteGeometry::rebuildMesh()
         }
     setVertexData(vbuf);
     setIndexData(ibuf);
-    setStride(6 * sizeof(float));
+    setStride(floats * sizeof(float));
     setPrimitiveType(PrimitiveType::Triangles);
     addAttribute(Attribute::PositionSemantic, 0, Attribute::F32Type);
     addAttribute(Attribute::NormalSemantic, 3 * sizeof(float), Attribute::F32Type);
+    addAttribute(Attribute::TexCoord0Semantic, 6 * sizeof(float), Attribute::F32Type);
     addAttribute(Attribute::IndexSemantic, 0, Attribute::U32Type);
     const float R = m_R * 1.6f;
     setBounds(QVector3D(-R, -R, -R), QVector3D(R, R, R));

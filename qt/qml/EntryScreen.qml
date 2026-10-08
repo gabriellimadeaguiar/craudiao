@@ -80,7 +80,7 @@ Item {
             id: orbit
             anchors.fill: parent
             property real a: 0
-            NumberAnimation on a { from: 0; to: Math.PI * 2; duration: 6000; loops: Animation.Infinite; running: root.active }
+            NumberAnimation on a { from: 0; to: Math.PI * 2; duration: 6000; loops: Animation.Infinite; running: root.active && root.app.power === "full" }
             onAChanged: requestPaint()
             onPaint: {
                 var c = getContext("2d"); c.reset();
@@ -98,7 +98,7 @@ Item {
                 spacing: 8
                 Rectangle {
                     width: 8; height: 8; radius: 4; color: Theme.primary; anchors.verticalCenter: parent.verticalCenter
-                    SequentialAnimation on opacity { loops: Animation.Infinite; running: root.active; NumberAnimation { to: 0.35; duration: 900 } NumberAnimation { to: 1; duration: 900 } }
+                    SequentialAnimation on opacity { loops: Animation.Infinite; running: root.active && root.app.power === "full"; NumberAnimation { to: 0.35; duration: 900 } NumberAnimation { to: 1; duration: 900 } }
                 }
                 Txt { role: "eyebrow"; text: "New to ExitLag?" }
             }

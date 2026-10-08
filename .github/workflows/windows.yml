@@ -41,12 +41,40 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item build/ExitLagAnalyzer.exe dist/
-          windeployqt --release --qmldir qt/qml --no-translations --no-compiler-runtime dist/ExitLagAnalyzer.exe
+          # sem opengl32sw (fallback de OpenGL por software, ~20 MB: o app usa Direct3D 11) e sem formatos de imagem
+          # que o app não usa
+          windeployqt --release --qmldir qt/qml --no-translations --no-compiler-runtime --no-opengl-sw `
+            --exclude-plugins qgif,qicns,qico,qtga,qtiff,qwbmp,qwebp,qpdf dist/ExitLagAnalyzer.exe
           # runtime do Visual C++ ao lado do .exe (deploy app-local): roda em PC sem o vc_redist e sem administrador
           $crt = Get-ChildItem "$env:VCToolsRedistDir\x64" -Directory -Filter "Microsoft.VC*.CRT" | Select-Object -First 1
           if (-not $crt) { throw "Visual C++ runtime not found in $env:VCToolsRedistDir" }
           Copy-Item "$($crt.FullName)\*.dll" dist/
           Copy-Item qt/README.md dist/README.md
+
+      # medição de desempenho no Windows (sem GPU no runner: Direct3D por software, WARP). Os números servem para
+      # comparar builds (memória, CPU da interface, tempo até o primeiro quadro), não como o que um PC com GPU faz.
+      - name: Performance smoke test
+        continue-on-error: true
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $scenes = @("entry", "home/game", "home/opt", "netmap")
+          foreach ($s in $scenes) {
+            $log = "perf-" + ($s -replace '[/:]', '_') + ".log"
+            $p = Start-Process -FilePath dist/ExitLagAnalyzer.exe -ArgumentList "--scene=$s", "--power=full", "--perf=$PWD\$log", "--quit-after=12000" -PassThru
+            if (-not $p.WaitForExit(40000)) { $p.Kill() }
+            Write-Host "== $s"; if (Test-Path $log) { Get-Content $log | Select-Object -Last 4 }
+          }
+          Get-ChildItem dist -Recurse | Measure-Object -Property Length -Sum | ForEach-Object { "dist size: {0:N1} MB" -f ($_.Sum / 1MB) }
+
+      - name: Upload performance logs
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-logs
+          path: perf-*.log
+          if-no-files-found: ignore
 
       - name: Installer (Inno Setup)
         shell: pwsh
