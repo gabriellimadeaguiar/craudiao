@@ -34,7 +34,7 @@ Item {
     }
     // mostra um launcher por vez, no ritmo da animação (a leitura real costuma ser instantânea)
     Timer {
-        id: pace; interval: 1100; repeat: true
+        id: pace; interval: 1100 / root.app.speed; repeat: true
         onTriggered: {
             if (root.shown.length < root.launchers.length) {
                 var l = root.launchers[root.shown.length];
@@ -43,7 +43,7 @@ Item {
             } else if (!root.scanning) { stop(); root.finished = true; out.start(); }
         }
     }
-    Timer { id: out; interval: 2600; onTriggered: root.app.go("home") }
+    Timer { id: out; interval: 2600 / root.app.speed; onTriggered: root.app.go("home") }
 
     Column {
         x: 720; anchors.verticalCenter: parent.verticalCenter; width: 600; spacing: 24

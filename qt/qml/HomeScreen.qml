@@ -22,11 +22,15 @@ Item {
     readonly property var ids: app.detected.length ? app.detected.map(function (g) { return g.id; }) : L.POPULAR
     property string gid: ids[0]
     readonly property var game: L.CATALOG[gid]
-    property string region: ""
-    readonly property var reg: L.REGIONS[region || "br"]
+    // servidor: "Automatic" fica com a região de menor ping (medido; antes disso, a estimativa pela distância)
+    property bool autoRegion: true
+    property string chosenRegion: ""
+    readonly property string region: autoRegion || !chosenRegion ? pings.best() : chosenRegion
+    readonly property var reg: L.REGIONS[region] || L.REGIONS.br
     readonly property real distance: L.km(app.origin, [reg.lat, reg.lon])
-    property var optimized: ({})
-    readonly property bool isOpt: optimized[gid] === true && app.exitlagOn
+    property var optimized: ({})              // { gameId: otimizado desde (ms) }
+    readonly property bool isOpt: !!optimized[gid] && app.exitlagOn
+    readonly property int lanes: L.lanesFor(gid)
     property var samples: []
     readonly property var st: samples.length ? L.stats(samples.slice(-40)) : null
     readonly property var est: st ? L.xlEstimate(st, distance, app.hw ? app.hw.wifi : false) : null
@@ -34,6 +38,9 @@ Item {
     property bool tourSeen: false
     property string page: "Home"
     property string drawer: ""
+    property bool panelOpen: false
+    property int fastestLane: 0
+    property int focusLane: -1
 
     onActiveChanged: {
         if (active) {
@@ -41,15 +48,24 @@ Item {
             select(ids.indexOf(app.gameId) >= 0 ? app.gameId : ids[0]);
             if (devOpen !== "") { tourSeen = true; devTimer.start(); }
             if (!tourSeen) tourStart.start();
-        } else lp.stop();
+        } else { lp.stop(); panelOpen = false; }
     }
+    onPanelOpenChanged: placeGlobe()
+    onRegionChanged: if (active) rebuild()
     property string devOpen: ""
     Timer { id: devTimer; interval: 1200; onTriggered: {
             if (root.devOpen === "menu") side.open = true;
             else if (root.devOpen === "off") root.setExitLag(false);
+            else if (root.devOpen === "game") root.panelOpen = true;
+            else if (root.devOpen === "orbit") { orbit.locked = false; orbit.open = true; orbit.locked = true; }
+            else if (root.devOpen === "opt") { root.panelOpen = true; panelBox.startOptimize(); }
+            else if (root.devOpen === "list") { root.panelOpen = true; panelBox.openList(); }
+            else if (root.devOpen.indexOf("tour") === 0) { tour.start(); tour.i = Number(root.devOpen.slice(4) || 0); }
             else if (root.devOpen.indexOf("page:") === 0) root.page = root.devOpen.slice(5);
             else { if (root.devOpen === "notifications") root.app.notify("Network map ready", "Best region: South America (Sao Paulo), 12 ms."); root.drawer = root.devOpen; } } }
     Timer { id: tourStart; interval: 1600; onTriggered: { tour.start(); root.tourSeen = true; } }
+
+    RegionPings { id: pings; origin: root.app.origin; regions: root.game.regions }
 
     LatencyProbe {
         id: lp; port: 443; interval: 1000; timeout: 1500
@@ -64,39 +80,58 @@ Item {
     Timer { id: retry; interval: 5000; onTriggered: if (root.active) { lp.stop(); lp.start(); } }
 
     function select(id) {
+        var changed = gid !== id;
         gid = id;
         app.gameId = id;
-        region = L.nearestRegion(gid, app.origin);
+        autoRegion = true; chosenRegion = "";
+        pings.measure();
         rebuild();
+        if (changed || !panelBox.log.length) panelBox.rebuilt();
     }
-    function setRegion(r) { region = r; rebuild(); }
+    function pickRegion(r) {
+        if (r === "auto") { autoRegion = true; chosenRegion = ""; }
+        else { autoRegion = false; chosenRegion = r; }
+        rebuild(); panelBox.rebuilt();
+    }
+    function placeGlobe() { globe.shiftX = panelOpen ? -(panelBox.width + 48) / 2 : 0; }
     function rebuild() {
+        if (!game) return;
         samples = []; lostRun = 0;
         lp.stop(); lp.host = reg.host; lp.start();
         globe.clear();
         var o = app.origin, s = L.drawPoint(o, [reg.lat, reg.lon]);
         globe.addRoute({ group: "isp", stops: [[o[0], o[1]], s], color: Theme.isp, tube: 0.3, lift: 0.4, speed: 0.18 });
+        // uma rota ExitLag por faixa, com desvios diferentes da linha direta
         var span = Math.max(4, Math.min(18, distance / 700));
         var mid = function (f, off) { return [o[0] + (s[0] - o[0]) * f + off, o[1] + (s[1] - o[1]) * f - off * 0.6]; };
-        [-0.5, 0.15, 0.7].forEach(function (k, i) {
-            globe.addRoute({ group: "xl", stops: [[o[0], o[1]], mid(0.42, k * span), mid(0.86, k * span * 0.35), s], color: Theme.success, tube: i ? 0.22 : 0.28, lift: 0.5 + i * 0.12, speed: 0.26 + i * 0.03 });
-        });
+        var offs = [-0.5, 0.15, 0.7, -0.15];
+        for (var i = 0; i < lanes; i++) {
+            var k = offs[i];
+            globe.addRoute({ group: "xl" + i, stops: [[o[0], o[1]], mid(0.42, k * span), mid(0.86, k * span * 0.35), s], color: Theme.success, tube: 0.24, lift: 0.5 + i * 0.1, speed: 0.26 + i * 0.03 });
+        }
         globe.addTag({ lat: o[0], lon: o[1], text: o[2], sub: "You", kind: "you", below: true });
         globe.addTag({ lat: s[0], lon: s[1], text: reg.city, sub: game.name, kind: "server" });
-        globe.frame([[o[0], o[1]], s], 6.2, 7.4);
-        globe.shiftX = -170;
+        globe.frame([[o[0], o[1]], s], 6.45, 6.45);
+        placeGlobe();
         applyOpt();
     }
     function applyOpt() {
         globe.show("isp", true);
         globe.gain("isp", isOpt ? 0.25 : 1);
-        globe.show("xl", isOpt);
+        for (var i = 0; i < 4; i++) {
+            globe.show("xl" + i, isOpt && i < lanes);
+            globe.gain("xl" + i, focusLane >= 0 ? (i === focusLane ? 0.95 : 0.12) : (i === fastestLane ? 1 : 0.22));
+        }
     }
     onIsOptChanged: applyOpt()
-    function toggleOpt() {
-        var o = Object.assign({}, optimized); o[gid] = !(optimized[gid] === true); optimized = o;
-        if (isOpt) { globe.pulse(Theme.success); app.notify(game.name + " optimized", "Routes through " + reg.city + " are live on the globe."); }
-        app.toast(isOpt ? game.name + " optimized" : "Optimization stopped", isOpt ? "ExitLag values on Route Monitoring are estimated from your measured route." : "");
+    onFocusLaneChanged: applyOpt()
+    onFastestLaneChanged: applyOpt()
+    function setOptimized(on) {
+        var o = Object.assign({}, optimized);
+        if (on) o[gid] = Date.now(); else delete o[gid];
+        optimized = o;
+        if (on) { globe.pulse(Theme.success); app.notify(game.name + " optimized", "Routes through " + reg.city + " are live on the globe."); }
+        else app.toast("Optimization stopped", game.name + " goes straight through your provider again.");
     }
     function setExitLag(on) {
         app.exitlagOn = on;
@@ -108,6 +143,7 @@ Item {
         if (app.hw) drawer = "pc";
         else app.rerun();
     }
+    Keys.onEscapePressed: if (panelOpen) panelOpen = false
 
     /* ---------- área da home ---------- */
     Item {
@@ -123,16 +159,20 @@ Item {
             selected: root.gid
             optimized: root.optimized
             exitlagOn: root.app.exitlagOn
-            onPicked: function (id) { root.select(id); }
+            panelOpen: root.panelOpen
+            onPicked: function (id) {
+                if (id === root.gid && root.panelOpen) root.panelOpen = false;
+                else { if (id !== root.gid) root.select(id); root.panelOpen = true; }
+            }
         }
 
         // Your setup: resultado do PC (ou o caminho para a análise)
         Rectangle {
             id: setup
-            x: 32; y: 96; width: 300; height: 64; radius: 12
+            x: 24; y: 88; width: 300; height: 64; radius: 12
             color: sma.containsMouse ? Theme.containerHigh : Theme.glass
             border.width: 1; border.color: sma.containsMouse ? Theme.stroke : Theme.divider
-            Behavior on color { ColorAnimation { duration: 150 } }
+            Behavior on color { ColorAnimation { duration: Theme.d100 } }
             Row { x: 12; anchors.verticalCenter: parent.verticalCenter; spacing: 12
                 Item { width: 40; height: 40
                     Ring { anchors.fill: parent; thickness: 2; value: root.app.hw ? root.app.hw.tier.score / 100 : 0; track: Theme.divider }
@@ -145,82 +185,26 @@ Item {
             Accessible.role: Accessible.Button; Accessible.name: "Your setup"
         }
 
-        // painel do jogo
-        Rectangle {
-            id: panel
-            x: 1440 - 32 - 360; y: 96; width: 360; height: panelCol.implicitHeight + 48; radius: 16
-            color: Theme.glass; border.width: 1; border.color: Theme.divider
-            Behavior on height { NumberAnimation { duration: Theme.d300; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard } }
-            Column {
-                id: panelCol; x: 24; y: 24; width: parent.width - 48; spacing: 16
-                Row { spacing: 12
-                    Image { width: 48; height: 48; source: L.iconFor(root.gid); sourceSize.width: 128; mipmap: true }
-                    Column { anchors.verticalCenter: parent.verticalCenter; width: 240
-                        Txt { role: "h2"; font.pixelSize: 22; lineHeight: 28; width: parent.width; elide: Text.ElideRight; wrapMode: Text.NoWrap; text: root.game.name }
-                        Row { spacing: 6
-                            Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: root.isOpt ? Theme.success : Theme.stroke
-                                SequentialAnimation on opacity { running: root.isOpt; loops: Animation.Infinite; NumberAnimation { to: 0.4; duration: 600 } NumberAnimation { to: 1; duration: 600 } } }
-                            Txt { role: "small"; text: !root.app.exitlagOn ? "ExitLag is off" : root.isOpt ? "Optimized" : "Not optimized" } } } }
-                Column { id: serverBox; width: parent.width; spacing: 8
-                    Txt { role: "small"; text: "Server" }
-                    Flow { width: parent.width; spacing: 8
-                        Repeater { model: root.game.regions
-                            delegate: Rectangle { required property var modelData
-                                readonly property bool on: root.region === modelData
-                                width: rt.implicitWidth + 24; height: 32; radius: 16
-                                color: on || rma.containsMouse ? Theme.containerHigh : Theme.input; border.width: 1; border.color: on ? Theme.textMain : Theme.stroke
-                                Behavior on border.color { ColorAnimation { duration: 150 } }
-                                Txt { id: rt; anchors.centerIn: parent; role: "small"; color: Theme.textMain; font.weight: Font.Medium; text: L.REGIONS[modelData].name }
-                                MouseArea { id: rma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setRegion(modelData) } } } } }
-                // ExitLag desligada: aviso no lugar do Optimize
-                Item {
-                    id: optBox
-                    width: parent.width; height: root.app.exitlagOn ? 40 : offBox.height
-                    Btn { id: optBtn; visible: root.app.exitlagOn; width: parent.width; kind: root.isOpt ? "outlined" : "filled"; text: root.isOpt ? "Stop" : "Optimize"; onClicked: root.toggleOpt() }
-                    Rectangle {
-                        id: offBox; visible: !root.app.exitlagOn
-                        width: parent.width; height: oc.implicitHeight + 32; radius: 4; color: Theme.warningSoftBg
-                        Column { id: oc; x: 16; y: 16; width: parent.width - 32; spacing: 8
-                            Row { spacing: 8; Icon { name: "alert"; size: 20; color: Theme.warningText } Txt { role: "body"; font.weight: Font.Medium; color: Theme.warningText; text: "ExitLag is off" } }
-                            Txt { role: "small"; color: Theme.warningText; width: parent.width; text: "Games go straight through your provider. Turn ExitLag on to optimize them." }
-                            Btn { kind: "outlined"; text: "Turn on"; onClicked: root.setExitLag(true) } }
-                    }
-                }
-            }
-        }
-
-        // Route Monitoring (ping real)
-        Rectangle {
-            id: monitor
-            x: panel.x; y: panel.y + panel.height + 16; width: 360; height: monCol.implicitHeight + 48; radius: 16
-            color: Theme.glass; border.width: 1; border.color: Theme.divider
-            Column {
-                id: monCol; x: 24; y: 24; width: parent.width - 48; spacing: 12
-                Item { width: parent.width; height: 24
-                    Row { spacing: 8; Icon { name: "route"; size: 18; anchors.verticalCenter: parent.verticalCenter } Txt { role: "h3"; text: "Route Monitoring" } }
-                    Row { anchors.right: parent.right; spacing: 6; anchors.verticalCenter: parent.verticalCenter
-                        Rectangle { width: 8; height: 8; radius: 4; color: root.app.netDown ? Theme.stroke : Theme.primary; anchors.verticalCenter: parent.verticalCenter
-                            SequentialAnimation on opacity { loops: Animation.Infinite; running: root.active && !root.app.netDown; NumberAnimation { to: 0.4; duration: 600 } NumberAnimation { to: 1; duration: 600 } } }
-                        Txt { role: "small"; text: root.app.netDown ? "Reconnecting" : "Live" } } }
-                Txt { role: "small"; text: root.app.origin[2] + " → " + root.reg.city + " · " + L.fmt(root.distance) + " km" }
-                Grid {
-                    columns: 3; columnSpacing: 12; rowSpacing: 8; width: parent.width
-                    Repeater {
-                        model: [
-                            ["Ping", root.st ? Math.round(root.isOpt && root.est ? root.est.avg : root.st.avg) : "–", "ms"],
-                            ["Jitter", root.st ? (root.isOpt && root.est ? root.est.jit : root.st.jit).toFixed(1) : "–", "ms"],
-                            ["Loss", root.st ? (root.isOpt ? 0 : root.st.loss).toFixed(1) : "–", "%"]
-                        ]
-                        delegate: Rectangle { required property var modelData
-                            width: (parent.width - 24) / 3; height: 64; radius: 8; color: Theme.containerHigh
-                            Column { x: 12; y: 10; spacing: 2
-                                Txt { role: "small"; text: modelData[0] }
-                                Row { spacing: 2; Txt { role: "h2"; font.pixelSize: 22; lineHeight: 26; text: modelData[1] } Txt { role: "small"; text: modelData[2]; anchors.bottom: parent.bottom; anchors.bottomMargin: 3 } } } } }
-                }
-                Spark { width: parent.width; height: 48; a: root.samples; b: []; capacity: 60; colorA: root.isOpt ? Theme.success : Theme.isp }
-                Txt { role: "small"; width: parent.width
-                    text: root.isOpt ? "Measured now on your route; ExitLag values are estimated from it." : "Measured now on your route, once per second." }
-            }
+        // detalhes do jogo
+        GamePanel {
+            id: panelBox
+            x: parent.width - width - 24; y: 88
+            app: root.app
+            open: root.panelOpen
+            gid: root.gid
+            region: root.region
+            auto: root.autoRegion
+            pings: pings
+            since: root.optimized[root.gid] || 0
+            exitlagOn: root.app.exitlagOn
+            direct: root.st
+            xlBase: root.est ? root.est.avg : L.baselineMs(root.distance) * 1.1 + 8
+            onClose: root.panelOpen = false
+            onPickRegion: function (r) { root.pickRegion(r); }
+            onOptimize: function (on) { root.setOptimized(on); }
+            onLaneFocus: function (lane) { root.focusLane = lane; }
+            onFastestMoved: function (lane) { root.fastestLane = lane; }
+            onTurnOn: root.setExitLag(true)
         }
     }
 
@@ -256,7 +240,7 @@ Item {
                     Btn { text: "Map my network again"; onClicked: root.app.go("netmap") }
                 }
                 Column {
-                    visible: ["PC Boost", "Network Analyzer"].indexOf(root.page) < 0; spacing: 16; width: 560
+                    visible: ["PC Boost", "Network Analyzer", "Home"].indexOf(root.page) < 0; spacing: 16; width: 560
                     Txt { role: "body"; color: Theme.textVariant; width: parent.width; text: "This page isn't part of this build yet. Its controls come from the ExitLag app." }
                     Btn { kind: "outlined"; text: "Back to Home"; onClicked: root.page = "Home" }
                 }
@@ -294,21 +278,31 @@ Item {
         current: root.page
         exitlagOn: root.app.exitlagOn
         onNavigate: function (p) { root.page = p; }
+        onToggled: function (on) { root.setExitLag(on); }
+        onHelp: root.drawer = "help"
     }
 
+    // onboarding (4 passos, como no protótipo): cada passo prepara a tela antes de apontar
     TourOverlay {
         id: tour
         anchors.fill: parent
         steps: [
-            { target: tourGames, title: "Your games", text: "Every supported game we found on this PC orbits the globe. Hover the globe to see them all; pick one to see its route." },
-            { target: serverBox, title: "Pick the server", text: "The region you play on. We suggest the closest one, measured from where you are." },
-            { target: optBox, title: "Optimize", text: "Routes this game through ExitLag. The globe shows the routes it uses." },
-            { target: monitor, title: "Route Monitoring", text: "Ping, jitter and packet loss to the server, measured live while the app is open." },
-            { target: setup, title: "Your setup", text: "Your PC's result lives here. Open it to see what to improve or run the analysis again." }
+            { target: tourGlobe, bare: true, corner: true, title: "Your games",
+              text: "Every game we found on your PC orbits the globe. Hover the globe to see them all, then click one to open it.",
+              enter: function () { root.panelOpen = false; orbit.locked = false; orbit.open = true; orbit.locked = true; } },
+            { target: panelBox, title: "Optimize",
+              text: "Optimize sends the game through the ExitLag network. Pick a server, or leave it on Automatic and we choose the best one.",
+              enter: function () { orbit.locked = false; orbit.open = false; orbit.locked = true; root.panelOpen = true; } },
+            { target: tourGlobe, title: "Your route, live",
+              text: "The globe draws the path from you to the game server. Optimized, the brightest green line is the fastest route right now." },
+            { target: setup, title: "Your setup",
+              text: "Your PC's result lives here. Open it to see what to improve, or run the analysis again." }
         ]
+        onFinished: { orbit.locked = false; orbit.open = false; }
     }
-    // alvo do passo 1: o globo com a órbita
-    Item { id: tourGames; x: root.globe.screenCenter.x - root.globe.screenRadius * 1.3; y: root.globe.screenCenter.y - root.globe.screenRadius * 0.7; width: root.globe.screenRadius * 2.6; height: root.globe.screenRadius * 1.4 }
+    // alvo do globo inteiro
+    Item { id: tourGlobe; x: root.globe.screenCenter.x - r; y: root.globe.screenCenter.y - r; width: r * 2; height: r * 2
+           readonly property real r: orbit.gp * 1.02 }
 
     /* ---------- gavetas ---------- */
     Drawer {

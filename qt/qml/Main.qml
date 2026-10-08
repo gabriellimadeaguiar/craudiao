@@ -11,7 +11,7 @@ Window {
     width: 1440; height: 810
     minimumWidth: 1024; minimumHeight: 576
     visible: true
-    color: Theme.stage
+    color: "transparent"                 // cantos arredondados: o que fica fora do recorte é transparente
     flags: Qt.Window | Qt.FramelessWindowHint
     title: "ExitLag"
 
@@ -47,7 +47,56 @@ Window {
         function toggleMaximize() { win.visibility === Window.Maximized ? win.showNormal() : win.showMaximized(); }
         function rerun() { go(hw ? "analysis" : "intro"); }
         function logout() { loggedIn = false; go("entry"); }
+
+        // controles do protótipo (orelha no canto): acelerar as esperas e pular etapas
+        property real speed: 1
+        readonly property var order: ["entry", "intro", "analysis", "results", "signup", "netmap", "home"]
+        function skip() {
+            var s = ({ entry: entry, intro: intro, analysis: analysis, results: results, signup: signup, netmap: netmap, libscan: libscan, home: home })[scene];
+            if (s && typeof s.skip === "function" && s.skip()) return;      // a tela avança a própria etapa
+            var i = order.indexOf(scene);
+            if (i >= 0 && i < order.length - 1) go(order[i + 1]);
+        }
+
+        // onde a pessoa está: pelo IP (cidade do provedor); sem resposta, fica a estimativa pelo fuso horário
+        property bool located: false
+        function locate() {
+            var urls = ["https://ipwho.is/", "https://ipapi.co/json/"];
+            var tryAt = function (i) {
+                if (i >= urls.length) { Platform.log("location: using time zone " + Platform.timeZoneId); return; }
+                var x = new XMLHttpRequest();
+                x.onreadystatechange = function () {
+                    if (x.readyState !== XMLHttpRequest.DONE) return;
+                    try {
+                        var j = JSON.parse(x.responseText);
+                        var lat = Number(j.latitude), lon = Number(j.longitude), city = j.city;
+                        if (x.status === 200 && j.success !== false && city && isFinite(lat) && isFinite(lon) && (lat !== 0 || lon !== 0)) {
+                            origin = [lat, lon, city, city.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase()];
+                            located = true;
+                            Platform.log("location: " + city + " (" + lat.toFixed(2) + ", " + lon.toFixed(2) + ")");
+                            return;
+                        }
+                    } catch (e) {}
+                    tryAt(i + 1);
+                };
+                x.open("GET", urls[i]);
+                x.send();
+            };
+            tryAt(0);
+        }
     }
+
+    Item {
+        id: frame
+        anchors.fill: parent
+        readonly property real radius: win.visibility === Window.Maximized || win.visibility === Window.FullScreen ? 0 : Theme.windowRadius
+        layer.enabled: radius > 0
+        layer.effect: ShaderEffect {
+            property vector2d size: Qt.vector2d(frame.width, frame.height)
+            property real radius: frame.radius
+            fragmentShader: "qrc:/shaders/round.frag.qsb"
+        }
+        Rectangle { anchors.fill: parent; color: Theme.stage }
 
     Item {
         id: stage
@@ -91,6 +140,8 @@ Window {
         }
 
         Toast { id: toaster; z: 100 }
+        DevEar { app: app; z: 200 }
+    }
     }
 
     // jogos instalados: procurados logo ao abrir, para o check-up já sugerir um jogo do PC
@@ -98,6 +149,7 @@ Window {
 
     Component.onCompleted: {
         scanner.scan();
+        app.locate();
         // --scene=home/pc abre a home já com a gaveta do PC (atalho de teste: pc, profile, help, notifications, menu, off)
         if (Platform.startScene !== "") { var sc = Platform.startScene.split("/"); home.devOpen = sc[1] || ""; app.scene = sc[0]; }
         Platform.log("ExitLag Analyzer · Qt " + Platform.qtVersion + " · origin " + app.origin[2]);

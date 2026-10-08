@@ -16,4 +16,6 @@ Rectangle {
     Rectangle { anchors.fill: parent; anchors.margins: -3; radius: 6; color: "transparent"; border.width: 2; border.color: Theme.series1; visible: root.activeFocus }
     MouseArea { id: ma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.clicked() }
     Keys.onReturnPressed: root.clicked()
+    property bool tipBelow: false
+    ToolTipLite { text: root.tip; below: root.tipBelow }
 }

@@ -53,6 +53,12 @@ var REGIONS = {
     kr:  { name: "Korea",          city: "Seoul",       code: "ICN", lat: 37.57,  lon: 126.98,  host: "dynamodb.ap-northeast-2.amazonaws.com" },
     oce: { name: "Oceania",        city: "Sydney",      code: "SYD", lat: -33.87, lon: 151.21,  host: "dynamodb.ap-southeast-2.amazonaws.com" }
 };
+// país de cada região (bandeira no seletor de servidor: :/flags/<país>.png, gerada por tools/make_flags.py)
+var REGION_COUNTRY = { br: "br", nae: "us", nac: "us", naw: "us", euw: "de", eun: "se", sea: "sg", jp: "jp", kr: "kr", oce: "au" };
+function flagFor(regionId) { return "qrc:/flags/" + (REGION_COUNTRY[regionId] || "us") + ".png"; }
+// quantas rotas ExitLag cada jogo usa em paralelo (2 a 4, como no protótipo)
+function lanesFor(gameId) { var h = 0; for (var i = 0; i < gameId.length; i++) h = (h * 31 + gameId.charCodeAt(i)) % 997; return 2 + h % 3; }
+
 // network map pós-login: um ponto por continente
 var CONTINENTS = [
     { name: "South America", city: "Sao Paulo", lat: -23.55, lon: -46.63, host: "dynamodb.sa-east-1.amazonaws.com" },
@@ -61,6 +67,39 @@ var CONTINENTS = [
     { name: "Africa",        city: "Cape Town", lat: -33.92, lon: 18.42,  host: "dynamodb.af-south-1.amazonaws.com" },
     { name: "Asia",          city: "Tokyo",     lat: 35.68,  lon: 139.69, host: "dynamodb.ap-northeast-1.amazonaws.com" },
     { name: "Oceania",       city: "Sydney",    lat: -33.87, lon: 151.21, host: "dynamodb.ap-southeast-2.amazonaws.com" }
+];
+
+// network map: destinos medidos de verdade (data centers da AWS, endpoint público do DynamoDB, porta 443).
+// O mapa dispara uma linha para cada um e, no fim, fica com o melhor de cada continente.
+function aws(r) { return "dynamodb." + r + ".amazonaws.com"; }
+var MAP_POINTS = [
+    { cont: "South America", city: "Sao Paulo",     lat: -23.55, lon: -46.63,  host: aws("sa-east-1") },
+    { cont: "North America", city: "Virginia",      lat: 39.04,  lon: -77.49,  host: aws("us-east-1") },
+    { cont: "North America", city: "Ohio",          lat: 39.96,  lon: -83.0,   host: aws("us-east-2") },
+    { cont: "North America", city: "California",    lat: 37.35,  lon: -121.96, host: aws("us-west-1") },
+    { cont: "North America", city: "Oregon",        lat: 45.84,  lon: -119.7,  host: aws("us-west-2") },
+    { cont: "North America", city: "Montreal",      lat: 45.5,   lon: -73.57,  host: aws("ca-central-1") },
+    { cont: "North America", city: "Mexico",        lat: 20.59,  lon: -100.39, host: aws("mx-central-1") },
+    { cont: "Europe",        city: "Dublin",        lat: 53.35,  lon: -6.26,   host: aws("eu-west-1") },
+    { cont: "Europe",        city: "London",        lat: 51.51,  lon: -0.13,   host: aws("eu-west-2") },
+    { cont: "Europe",        city: "Paris",         lat: 48.86,  lon: 2.35,    host: aws("eu-west-3") },
+    { cont: "Europe",        city: "Frankfurt",     lat: 50.11,  lon: 8.68,    host: aws("eu-central-1") },
+    { cont: "Europe",        city: "Stockholm",     lat: 59.33,  lon: 18.07,   host: aws("eu-north-1") },
+    { cont: "Europe",        city: "Milan",         lat: 45.46,  lon: 9.19,    host: aws("eu-south-1") },
+    { cont: "Europe",        city: "Madrid",        lat: 40.42,  lon: -3.7,    host: aws("eu-south-2") },
+    { cont: "Africa",        city: "Cape Town",     lat: -33.92, lon: 18.42,   host: aws("af-south-1") },
+    { cont: "Middle East",   city: "Bahrain",       lat: 26.07,  lon: 50.56,   host: aws("me-south-1") },
+    { cont: "Middle East",   city: "Dubai",         lat: 25.2,   lon: 55.27,   host: aws("me-central-1") },
+    { cont: "Middle East",   city: "Tel Aviv",      lat: 32.09,  lon: 34.78,   host: aws("il-central-1") },
+    { cont: "Asia",          city: "Tokyo",         lat: 35.68,  lon: 139.69,  host: aws("ap-northeast-1") },
+    { cont: "Asia",          city: "Seoul",         lat: 37.57,  lon: 126.98,  host: aws("ap-northeast-2") },
+    { cont: "Asia",          city: "Osaka",         lat: 34.69,  lon: 135.5,   host: aws("ap-northeast-3") },
+    { cont: "Asia",          city: "Singapore",     lat: 1.35,   lon: 103.82,  host: aws("ap-southeast-1") },
+    { cont: "Asia",          city: "Jakarta",       lat: -6.21,  lon: 106.85,  host: aws("ap-southeast-3") },
+    { cont: "Asia",          city: "Mumbai",        lat: 19.08,  lon: 72.88,   host: aws("ap-south-1") },
+    { cont: "Asia",          city: "Hong Kong",     lat: 22.32,  lon: 114.17,  host: aws("ap-east-1") },
+    { cont: "Oceania",       city: "Sydney",        lat: -33.87, lon: 151.21,  host: aws("ap-southeast-2") },
+    { cont: "Oceania",       city: "Melbourne",     lat: -37.81, lon: 144.96,  host: aws("ap-southeast-4") }
 ];
 
 /* ---------- Catálogo de jogos (capas no recurso :/games) ---------- */

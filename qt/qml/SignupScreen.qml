@@ -56,5 +56,5 @@ Item {
         app.notify(signup ? (plan ? "Subscription active" : "Your free trial started") : "Welcome back", signup ? "ExitLag can now fix the problems from your check-up." : "Logged in as " + app.email + ".");
         leave.start();
     }
-    Timer { id: leave; interval: 1600; onTriggered: root.app.go("netmap") }
+    Timer { id: leave; interval: 1600 / root.app.speed; onTriggered: root.app.go("netmap") }
 }

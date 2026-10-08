@@ -13,6 +13,7 @@ int main(int argc, char *argv[])
     // profundidade, stencil e MSAA para o Qt Quick (no Windows o Qt usa Direct3D 11 por padrão)
     QSurfaceFormat fmt = QSurfaceFormat::defaultFormat();
     fmt.setDepthBufferSize(24); fmt.setStencilBufferSize(8); fmt.setSamples(4);
+    fmt.setAlphaBufferSize(8);   // janela transparente fora dos cantos arredondados
     QSurfaceFormat::setDefaultFormat(fmt);
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("ExitLag Analyzer"));

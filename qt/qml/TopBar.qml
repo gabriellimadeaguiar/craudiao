@@ -24,7 +24,7 @@ Item {
 
     Row {
         x: 20; anchors.verticalCenter: parent.verticalCenter; spacing: 16
-        IconBtn { icon: "menu"; tip: "Menu"; iconColor: Theme.textMain; onClicked: root.menu() }
+        IconBtn { tipBelow: true; icon: "menu"; tip: "Menu"; iconColor: Theme.textMain; onClicked: root.menu() }
         Logo { anchors.verticalCenter: parent.verticalCenter }
         Toggle { anchors.verticalCenter: parent.verticalCenter; label: "ExitLag"; checked: root.exitlagOn; onToggled: function (on) { root.toggled(on); } }
     }
@@ -83,10 +83,10 @@ Item {
                 }
             }
         }
-        IconBtn { icon: "help"; tip: "Help Center"; iconColor: Theme.textMain; onClicked: root.openDrawer("help") }
-        IconBtn { icon: "user"; tip: "Profile"; iconColor: Theme.textMain; onClicked: root.openDrawer("profile") }
+        IconBtn { tipBelow: true; icon: "help"; tip: "Help Center"; iconColor: Theme.textMain; onClicked: root.openDrawer("help") }
+        IconBtn { tipBelow: true; icon: "user"; tip: "Profile"; iconColor: Theme.textMain; onClicked: root.openDrawer("profile") }
         IconBtn {
-            icon: "bell"; tip: "Notifications"; iconColor: Theme.textMain; onClicked: root.openDrawer("notifications")
+            tipBelow: true; icon: "bell"; tip: "Notifications"; iconColor: Theme.textMain; onClicked: root.openDrawer("notifications")
             Rectangle {
                 anchors.right: parent.right; anchors.top: parent.top
                 height: 16; width: Math.max(16, bt.implicitWidth + 8); radius: 8; color: Theme.primary
@@ -96,7 +96,7 @@ Item {
             }
         }
         Rectangle { width: 1; height: 16; color: Theme.divider; anchors.verticalCenter: parent.verticalCenter }
-        IconBtn { icon: "min"; tip: "Minimize"; onClicked: root.app.win.showMinimized() }
-        IconBtn { icon: "close"; tip: "Close"; onClicked: Qt.quit() }
+        IconBtn { tipBelow: true; icon: "min"; tip: "Minimize"; onClicked: root.app.win.showMinimized() }
+        IconBtn { tipBelow: true; icon: "close"; tip: "Close"; onClicked: Qt.quit() }
     }
 }

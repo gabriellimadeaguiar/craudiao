@@ -8,7 +8,7 @@ project(ExitLagAnalyzer VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Network Qml Quick Quick3D)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Network Qml Quick Quick3D ShaderTools)
 qt_standard_project_setup()
 
 qt_add_executable(ExitLagAnalyzer WIN32 MACOSX_BUNDLE
@@ -64,6 +64,10 @@ qt_add_qml_module(ExitLagAnalyzer
         qml/TopBar.qml
         qml/GameOrbit.qml
         qml/PcResultView.qml
+        qml/DevEar.qml
+        qml/RegionPings.qml
+        qml/GamePanel.qml
+        qml/ToolTipLite.qml
         qml/RouteModel.qml
         qml/Ring.qml
         qml/Spark.qml
@@ -85,13 +89,21 @@ qt_add_qml_module(ExitLagAnalyzer
         qml/shaders/glow.frag
 )
 
+# efeitos 2D (ShaderEffect) compilados para .qsb: :/shaders/round.frag.qsb
+qt_add_shaders(ExitLagAnalyzer "effects"
+    PREFIX "/"
+    BASE qml
+    FILES qml/shaders/round.frag qml/shaders/discmask.frag
+)
+
 file(GLOB GAME_IMAGES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} resources/games/*)
 file(GLOB ICON_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} resources/icons/*.png)
+file(GLOB FLAG_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} resources/flags/*.png)
 file(GLOB FONT_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} resources/fonts/*.ttf)
 qt_add_resources(ExitLagAnalyzer "assets"
     PREFIX "/"
     BASE resources
-    FILES resources/data/land.bin resources/app.png ${GAME_IMAGES} ${ICON_FILES} ${FONT_FILES}
+    FILES resources/data/land.bin resources/app.png ${GAME_IMAGES} ${ICON_FILES} ${FLAG_FILES} ${FONT_FILES}
 )
 
 target_include_directories(ExitLagAnalyzer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

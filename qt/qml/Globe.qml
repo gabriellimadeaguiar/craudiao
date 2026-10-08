@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick3D
+import QtQuick.Shapes
 import ExitLag
 
 /* Globo de rotas em Qt Quick 3D, compartilhado por todas as telas.
@@ -31,11 +32,15 @@ Item {
     property var groupsShown: ({})
     property var groupsGain: ({})
     property real nodesOpacity: offline ? 0.08 : 0.35
-    property color landColor: offline ? Theme.globeLandOff : Theme.globeLand
-    property color rimColor: offline ? Theme.globeRimOff : Theme.globeRim
+    readonly property color landColor: Qt.tint(baseLand, Qt.rgba(0.133, 0.922, 0.639, flash * 0.45))
+    // flash: 0..1, pisca o globo de verde (fim do network map); mistura na borda, na terra e no halo
+    property real flash: 0
+    property color baseRim: offline ? Theme.globeRimOff : Theme.globeRim
+    property color baseLand: offline ? Theme.globeLandOff : Theme.globeLand
+    readonly property color rimColor: Qt.tint(baseRim, Qt.rgba(0.133, 0.922, 0.639, flash * 0.75))
     Behavior on nodesOpacity { NumberAnimation { duration: Theme.d500 } }
-    Behavior on landColor { ColorAnimation { duration: Theme.d900 } }
-    Behavior on rimColor { ColorAnimation { duration: Theme.d900 } }
+    Behavior on baseLand { ColorAnimation { duration: Theme.d900 } }
+    Behavior on baseRim { ColorAnimation { duration: Theme.d900 } }
 
     // centro e raio do globo na tela (para a órbita de jogos, o cursor e o pulso)
     readonly property real screenRadius: height / 2 / Math.tan(15 * Math.PI / 180) / Math.sqrt(Math.max(curDist * curDist - 1, 0.01))
@@ -65,6 +70,13 @@ Item {
     function addTag(t) { tags = tags.concat([t]); return tags.length - 1; }
     function setTag(i, patch) { var a = tags.slice(); a[i] = Object.assign({}, a[i], patch); tags = a; }
     // anel verde que sai da borda do globo, uma vez (ligar a ExitLag)
+    // flash verde: sobe em 0,35 s e apaga em 1,6 s, com o anel saindo da borda
+    function celebrate() { flashAnim.restart(); pulse(Theme.success); }
+    SequentialAnimation {
+        id: flashAnim
+        NumberAnimation { target: globe; property: "flash"; from: 0; to: 1; duration: 350; easing.type: Easing.InOutSine }
+        NumberAnimation { target: globe; property: "flash"; to: 0; duration: 1600; easing.type: Easing.InQuad }
+    }
     function pulse(color) { pulseRing.tint = color || Theme.success; pulseAnim.restart(); }
     // enquadra um conjunto de pontos: centro médio e distância para caber tudo
     function frame(points, minD, maxD) {
@@ -143,6 +155,27 @@ Item {
             return Math.sqrt(dx * dx + dy * dy) < globe.screenRadius;
         }
         cursorShape: drag.active ? Qt.ClosedHandCursor : overGlobe ? Qt.OpenHandCursor : Qt.ArrowCursor
+    }
+
+    // luz difusa ao fundo: um halo largo e suave atrás do planeta (some no laranja quando a ExitLag desliga)
+    Item {
+        id: backGlow
+        readonly property real r: globe.screenRadius * 2.6
+        x: globe.screenCenter.x - r; y: globe.screenCenter.y - r; width: r * 2; height: r * 2
+        Shape {
+            anchors.fill: parent
+            ShapePath {
+                strokeColor: "transparent"
+                fillGradient: RadialGradient {
+                    centerX: backGlow.r; centerY: backGlow.r; centerRadius: backGlow.r; focalX: backGlow.r; focalY: backGlow.r
+                    GradientStop { position: 0.0; color: Qt.rgba(globe.rimColor.r, globe.rimColor.g, globe.rimColor.b, 0.30 + globe.flash * 0.2) }
+                    GradientStop { position: 0.32; color: Qt.rgba(globe.rimColor.r, globe.rimColor.g, globe.rimColor.b, 0.16 + globe.flash * 0.12) }
+                    GradientStop { position: 0.6; color: Qt.rgba(globe.rimColor.r, globe.rimColor.g, globe.rimColor.b, 0.05) }
+                    GradientStop { position: 1.0; color: "transparent" }
+                }
+                PathAngleArc { centerX: backGlow.r; centerY: backGlow.r; radiusX: backGlow.r; radiusY: backGlow.r; startAngle: 0; sweepAngle: 360 }
+            }
+        }
     }
 
     View3D {
@@ -244,14 +277,16 @@ Item {
         // atmosfera: fica parada (não gira com o globo), desenhada pelas faces de trás
         Model {
             source: "#Sphere"
-            scale: Qt.vector3d(globe.radius / 50 * 1.22, globe.radius / 50 * 1.22, globe.radius / 50 * 1.22)
+            scale: Qt.vector3d(globe.radius / 50 * 1.6, globe.radius / 50 * 1.6, globe.radius / 50 * 1.6)
             materials: CustomMaterial {
                 shadingMode: CustomMaterial.Unshaded
                 cullMode: Material.FrontFaceCulling
                 sourceBlend: CustomMaterial.One
                 destinationBlend: CustomMaterial.One
                 property color rimColor: globe.rimColor
-                property real intensity: 0.5
+                property real intensity: 0.42 + globe.flash * 0.4
+                property real outer: 1.6
+                property real falloff: 4.5
                 vertexShader: "shaders/atmo.vert"
                 fragmentShader: "shaders/atmo.frag"
             }

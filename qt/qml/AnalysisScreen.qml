@@ -69,7 +69,7 @@ Item {
         interval: 100; repeat: true
         property int k: 0
         onTriggered: {
-            root.stepT += 0.1;
+            root.stepT += 0.1 * root.app.speed;
             var R = root;
             if (R.phase === "hw") {
                 if (!R.hw) {
@@ -105,6 +105,17 @@ Item {
                 if (R.stepT > 1.8) { seq.stop(); R.finish(); }
             }
         }
+    }
+
+    // orelha do protótipo: adianta a fase atual
+    function skip() {
+        if (phase === "hw") { if (!hw) return true; revealed = hw.parts.length - 1; stepT = 1; }
+        else if (phase === "hwdone") startNet();
+        else if (phase === "net") { if (sI.length) startXl(); else stepT = 14; }
+        else if (phase === "xl") stepT = 7.1;
+        else if (phase === "done") stepT = 2;
+        else return false;
+        return true;
     }
 
     property bool lossTagged: false

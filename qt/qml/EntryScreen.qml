@@ -138,5 +138,5 @@ Item {
         app.notify("Welcome back", "Logged in as " + app.email + ".");
         leave.start();
     }
-    Timer { id: leave; interval: 1400; onTriggered: root.app.go("netmap") }
+    Timer { id: leave; interval: 1400 / root.app.speed; onTriggered: root.app.go("netmap") }
 }
