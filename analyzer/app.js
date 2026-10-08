@@ -232,7 +232,7 @@ function netResult(m, sI, sX) {
 }
 
 /* ---------- Estado ---------- */
-const S = { scene: 'intro', profile: 'mid', hw: null, net: null, offer: null, loginMode: 'signup', running: false, game: 0, region: null, runId: 0 };
+const S = { scene: 'entry', profile: 'mid', hw: null, net: null, offer: null, loginMode: 'signup', running: false, game: 0, region: null, runId: 0 };
 try { const p = localStorage.getItem('xla-profile'); if (PROFILES[p]) S.profile = p; } catch { }
 const sevRank = { critical: 0, warning: 1, success: 2 };
 const sevLabel = { critical: 'Bottleneck', warning: 'Attention', success: 'Good' };
@@ -253,6 +253,7 @@ function scene(name) {
   document.querySelectorAll('[data-jump]').forEach(b => b.setAttribute('aria-pressed', b.dataset.jump === name));
   if (!globe) return;
   if (name === 'intro') { clearTags(); globe.idle(6.45); globe.setShift(300); }
+  if (name === 'entry') { clearTags(); globe.idle(5.6); globe.setShift(120); }
   if (name === 'login') { clearTags(); globe.idle(5.2); globe.setShift(0); }
 }
 
@@ -280,7 +281,7 @@ function clearTags() { tags = []; $('gTags').innerHTML = ''; }
 function addTag(v, html, cls = '') { const el = document.createElement('span'); el.className = 'gtag ' + cls; el.innerHTML = html; $('gTags').appendChild(el); const t = { v, el }; tags.push(t); return t; }
 import('./globe.js').then(({ createGlobe }) => {
   globe = createGlobe($('globe'), origin);
-  globe.setShift(300, 0, true);
+  globe.setShift(S.scene === 'entry' ? 120 : 300, 0, true); if (S.scene === 'entry') globe.idle(5.6);
   globe.onFrame = () => { for (const t of tags) { const p = globe.screenOf(t.v); t.el.style.transform = `translate(${p.x}px, ${p.y}px)`; t.el.hidden = !p.visible || t.off; } };
 }).catch(e => console.warn('Globe unavailable', e));
 
@@ -519,13 +520,30 @@ $('lgForm').addEventListener('submit', e => {
   finishLogin(S.loginMode === 'login' ? 'Logged in.' : 'Account created.');
 });
 $('lgGoogle').addEventListener('click', () => finishLogin('Signed in with Google.'));
-$('lgRestart').addEventListener('click', () => { S.runId++; S.running = false; S.hw = S.net = S.offer = null; pick = 'trial'; $('lgEmail').value = $('lgPass').value = ''; scene('intro'); });
+$('lgRestart').addEventListener('click', () => { S.runId++; S.running = false; S.hw = S.net = S.offer = null; pick = 'trial'; $('lgEmail').value = $('lgPass').value = ''; scene('entry'); });
+
+/* ---------- Entrada: login de quem já assina, ou o check-up para quem é novo ---------- */
+$('enCheck').addEventListener('click', () => scene('intro'));
+$('introLogin').addEventListener('click', () => scene('entry'));
+function enDone() { $('enForm').hidden = true; document.querySelector('.en-head').hidden = true; const d = $('enDone'); d.hidden = false; d.classList.remove('in'); void d.offsetWidth; d.classList.add('in'); }
+$('enForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const em = $('enEmail'), pw = $('enPass');
+  const bad = [[em, !/^\S+@\S+\.\S+$/.test(em.value), 'Enter the email you use for ExitLag.'], [pw, !pw.value, 'Enter your password.']];
+  bad.forEach(([el, b]) => el.parentElement.classList.toggle('bad', b));
+  const first = bad.find(x => x[1]);
+  if (first) { $('enErr').textContent = first[2]; first[0].focus(); return; }
+  $('enErr').textContent = ''; enDone();
+});
+$('enGoogle').addEventListener('click', enDone);
+$('enForgot').addEventListener('click', () => toast('Reset your password', 'We send a reset link to your email. Not active in the prototype.'));
+$('enBack').addEventListener('click', () => { $('enForm').hidden = false; document.querySelector('.en-head').hidden = false; $('enDone').hidden = true; $('enPass').value = ''; });
 
 /* ---------- Chips do protótipo ---------- */
 function fill() { if (!S.hw) S.hw = hwResult(); if (!S.net) S.net = netResult(simulate(GAMES[S.game], S.region || nearest(GAMES[S.game]))); }
 function jump(name) {
   S.runId++; S.running = false; $('finale').classList.remove('show');
-  if (name === 'intro') { app.classList.remove('net-on', 'xl-on'); scene('intro'); return; }
+  if (name === 'intro' || name === 'entry') { app.classList.remove('net-on', 'xl-on'); scene(name); return; }
   if (name === 'scan') { runAll(); return; }
   fill();
   if (name === 'results') { app.classList.remove('net-on', 'xl-on'); globe && globe.scan(false); showResults(); return; }
@@ -554,4 +572,4 @@ function toast(t, d) {
 /* ---------- Início ---------- */
 renderPicker();
 const h = location.hash.slice(1);
-if (['scan', 'results', 'login'].includes(h)) jump(h); else scene('intro');
+if (['intro', 'scan', 'results', 'login'].includes(h)) jump(h); else scene('entry');

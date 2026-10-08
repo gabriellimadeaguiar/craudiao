@@ -125,6 +125,44 @@ svg.i.xs { width: 16px; height: 16px; }
 .scene.on .rv { animation: rise 800ms var(--ease-decelerate) both; animation-delay: calc(var(--d, 0) * 1ms + 250ms); }
 @keyframes rise { from { opacity: 0; transform: translateY(16px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
 
+/* ---------- entrada: login à esquerda, chamada para o check-up à direita, sobre o globo ---------- */
+.app[data-scene="entry"] .globe-host { opacity: 1; }
+#s-entry::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, var(--surface) 0%, #0b0c0fe6 34%, #0b0c0f00 58%); }
+.en-login { position: absolute; left: 96px; top: 50%; translate: 0 -50%; width: 400px; display: flex; flex-direction: column; gap: var(--sp-2xl); }
+.en-head { display: flex; flex-direction: column; gap: var(--sp-sm); }
+.en-title { font-family: var(--font-display); font-weight: 700; font-size: 52px; line-height: 52px; letter-spacing: -1px; }
+.en-row { display: flex; align-items: center; justify-content: space-between; }
+.en-row .link { text-decoration: none; }
+.en-row .link:hover { color: var(--on-surface); text-decoration: underline; }
+.remember { display: flex; align-items: center; gap: var(--sp-sm); color: var(--on-surface-variant); cursor: pointer; width: max-content; }
+.remember input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.remember .box { width: 18px; height: 18px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--stroke); display: grid; place-items: center; color: transparent; transition: background-color .15s ease, box-shadow .15s ease, color .15s ease; }
+.remember .box svg { width: 14px; height: 14px; stroke-width: 2.2; }
+.remember input:checked + .box { background: var(--on-surface); box-shadow: none; color: var(--surface); }
+.remember input:focus-visible + .box { outline: 2px solid var(--series1); outline-offset: 2px; }
+.en-done { align-items: flex-start; text-align: left; }
+.en-cta { position: absolute; right: 96px; top: 50%; translate: 0 -50%; width: 440px; padding: 40px; border-radius: 24px; display: flex; flex-direction: column; gap: var(--sp-xl);
+  background: linear-gradient(160deg, #191d24e0, #111317d9); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: var(--shadow-panel), inset 0 0 0 1px var(--divider); overflow: hidden; }
+/* borda em degradê que corre devagar em volta do cartão, chamando o olhar sem piscar */
+.en-cta::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: conic-gradient(from var(--a, 0deg), #f5292900 0deg, #f52929b3 40deg, #f5292900 110deg, #f5292900 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: orbit 6s linear infinite; }
+@property --a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@keyframes orbit { to { --a: 360deg; } }
+.en-cta::after { content: ""; position: absolute; right: -140px; top: -140px; width: 320px; height: 320px; border-radius: 50%; background: radial-gradient(closest-side, #f529291f, transparent); pointer-events: none; }
+.cta-title { font-family: var(--font-display); font-weight: 700; font-size: 40px; line-height: 42px; letter-spacing: -.5px; }
+.cta-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-lg); }
+.cta-list li { display: flex; gap: var(--sp-md); align-items: flex-start; }
+.cta-list li > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.cta-list b { font-weight: 500; line-height: 20px; letter-spacing: .25px; }
+.cta-list .ic { width: 36px; height: 36px; border-radius: 8px; background: var(--input); display: grid; place-items: center; flex: none; }
+.scene.on .cta-list li { animation: rise 700ms var(--ease-decelerate) both; }
+.scene.on .cta-list li:nth-child(1) { animation-delay: 550ms; } .scene.on .cta-list li:nth-child(2) { animation-delay: 650ms; } .scene.on .cta-list li:nth-child(3) { animation-delay: 750ms; }
+.cta-note { display: inline-flex; align-items: center; gap: 6px; align-self: center; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 0 #f5292966; animation: pulse 1.8s var(--ease-standard) infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 8px #f5292900; } 100% { box-shadow: 0 0 0 0 #f5292900; } }
+
 /* ---------- início ---------- */
 #s-intro .wrap { position: absolute; left: 96px; top: 50%; translate: 0 -50%; width: 600px; display: flex; flex-direction: column; gap: var(--sp-xl); }
 .hero { font-family: var(--font-display); font-weight: 700; font-size: 68px; line-height: 68px; letter-spacing: -1px; }
@@ -406,10 +444,11 @@ svg.i.xs { width: 16px; height: 16px; }
   <div class="vchips">
     <nav class="vgroup" aria-label="Prototype: jump to a scene">
       <span class="vlabel">Flow</span>
-      <button class="vchip" type="button" data-jump="intro" aria-pressed="true">Start</button><span class="vsep" aria-hidden="true"></span>
+      <button class="vchip" type="button" data-jump="entry" aria-pressed="true">Log in</button><span class="vsep" aria-hidden="true"></span>
+      <button class="vchip" type="button" data-jump="intro" aria-pressed="false">Check-up</button><span class="vsep" aria-hidden="true"></span>
       <button class="vchip" type="button" data-jump="scan" aria-pressed="false">Analysis</button><span class="vsep" aria-hidden="true"></span>
       <button class="vchip" type="button" data-jump="results" aria-pressed="false">Results &amp; plans</button><span class="vsep" aria-hidden="true"></span>
-      <button class="vchip" type="button" data-jump="login" aria-pressed="false">Log in</button>
+      <button class="vchip" type="button" data-jump="login" aria-pressed="false">Sign up</button>
     </nav>
     <div class="vgroup" role="group" aria-label="Prototype: simulated PC">
       <span class="vlabel">Simulated PC</span>
@@ -419,7 +458,7 @@ svg.i.xs { width: 16px; height: 16px; }
     </div>
   </div>
 
-  <div class="app" id="app" data-scene="intro">
+  <div class="app" id="app" data-scene="entry">
     <div class="globe-host" id="globeHost"><canvas id="globe" role="img" aria-label="Globe with your location and the routes to the game server"></canvas><div class="globe-tags" id="gTags"></div></div>
 
     <div class="corner l"><img class="logo" src="logo.svg" alt="ExitLag"></div>
@@ -428,8 +467,45 @@ svg.i.xs { width: 16px; height: 16px; }
       <button class="icon-btn" type="button" aria-label="Close"><svg class="i"><use href="#i-close"/></svg></button>
     </div>
 
+    <!-- ================= ENTRADA: login + chamada para o check-up ================= -->
+    <section class="scene on" id="s-entry" aria-labelledby="enTitle">
+      <div class="en-login">
+        <div class="en-head rv" style="--d:0">
+          <h1 class="en-title" id="enTitle">Welcome back.</h1>
+          <p class="body-lg">Log in to pick up your routes, games and settings.</p>
+        </div>
+        <form class="lg-form rv" style="--d:120" id="enForm" novalidate>
+          <label class="field"><span class="small t-var">Email</span><span class="input"><svg class="i sm"><use href="#i-mail"/></svg><input id="enEmail" type="email" autocomplete="email" placeholder="you@example.com" required></span></label>
+          <label class="field"><span class="en-row"><span class="small t-var">Password</span><button class="link small t-var" type="button" id="enForgot">Forgot password?</button></span><span class="input"><svg class="i sm"><use href="#i-lock"/></svg><input id="enPass" type="password" autocomplete="current-password" placeholder="Your password" required></span></label>
+          <label class="remember small"><input type="checkbox" id="enKeep" checked><span class="box"><svg class="i xs"><use href="#i-check"/></svg></span>Keep me logged in on this PC</label>
+          <p class="small lg-err" id="enErr" role="alert"></p>
+          <button class="btn filled lg block" type="submit">Log in</button>
+          <div class="or small t-var"><span></span>or<span></span></div>
+          <button class="btn outlined block" type="button" id="enGoogle">Continue with Google</button>
+        </form>
+        <div class="lg-done en-done" id="enDone" hidden>
+          <span class="ok"><svg class="i"><use href="#i-check"/></svg></span>
+          <h2>Welcome back</h2>
+          <p class="body t-var">End of this prototype path: in the app, your home with your games and routes opens here.</p>
+          <button class="btn outlined" type="button" id="enBack">Back to log in</button>
+        </div>
+      </div>
+
+      <aside class="en-cta rv" style="--d:300" aria-labelledby="ctaTitle">
+        <span class="eyebrow"><span class="pulse"></span>New to ExitLag?</span>
+        <h2 class="cta-title" id="ctaTitle">See what's slowing your games before you sign up.</h2>
+        <ul class="cta-list">
+          <li><span class="ic"><svg class="i sm"><use href="#i-pc"/></svg></span><span><b>Your PC</b><span class="small t-var">What kind of machine you have and what's costing you frames</span></span></li>
+          <li><span class="ic"><svg class="i sm"><use href="#i-net"/></svg></span><span><b>Your connection</b><span class="small t-var">Your route to the game server, today and through ExitLag</span></span></li>
+          <li><span class="ic"><svg class="i sm"><use href="#i-report"/></svg></span><span><b>A clear result</b><span class="small t-var">What to fix first, and what ExitLag fixes for you</span></span></li>
+        </ul>
+        <button class="btn filled lg block" type="button" id="enCheck">Start free check-up</button>
+        <span class="small t-var cta-note"><svg class="i xs"><use href="#i-clock"/></svg>About a minute · free · no account needed</span>
+      </aside>
+    </section>
+
     <!-- ================= INÍCIO ================= -->
-    <section class="scene on" id="s-intro" aria-labelledby="inTitle">
+    <section class="scene" id="s-intro" aria-labelledby="inTitle">
       <div class="wrap">
         <span class="eyebrow rv" style="--d:0">Free check-up · about a minute · no account</span>
         <h1 class="hero rv" style="--d:80" id="inTitle">Find out what's slowing your games&nbsp;down.</h1>
@@ -451,6 +527,7 @@ svg.i.xs { width: 16px; height: 16px; }
       <div class="intro-foot small t-var rv" style="--d:520">
         <span><svg class="i xs"><use href="#i-shield"/></svg>Results stay on this PC</span>
         <span><svg class="i xs"><use href="#i-pin"/></svg>Testing from <b class="t-em" id="originName" style="color:var(--on-surface)"></b></span>
+        <span>Already have an account? <button class="link" type="button" id="introLogin" style="color:var(--on-surface)">Log in</button></span>
       </div>
     </section>
 
