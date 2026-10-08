@@ -1,0 +1,730 @@
+<title>ExitLag Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anek+Latin:wght@600;700&family=Ubuntu+Sans:wght@400;500;700&family=Ubuntu:wght@500&display=swap">
+<style>
+/* Layout: o frame 1440×810 do app desktop (mesmo do protótipo da home), sem login.
+   Sidebar com as etapas da análise e as ferramentas ExitLag travadas; conteúdo à direita, globo de rotas atrás das telas de rede. */
+:root {
+  /* Token System · modo Desktop (vindos do protótipo da home atual) */
+  --surface: #0b0c0f;
+  --container: #111317;
+  --container-high: #191d24;
+  --input: #20242d;
+  --input-hover: #3b4252;
+  --on-surface: #ebeced;
+  --on-surface-variant: #878d97;
+  --divider: #313741;
+  --stroke: #555c68;
+  --primary: #f52929;
+  --primary-hover: #ff3d3d;
+  --primary-pressed: #d91f1f;
+  --primary-soft: #f529291a;
+  --critical-text: #ff6b6b;
+  --success: #22eba3;
+  --success-container: #122825;
+  --warning: #eed80e;
+  --warning-container: #272716;
+  --isp: #eb8322;
+  --isp-container: #261e18;
+  --series1: #92e2f2;
+  --stage: #050608;
+  --state-hover: #ebeced14;
+  --state-pressed: #ebeced1f;
+  --font: "Ubuntu Sans", "Ubuntu", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Anek Latin", "Ubuntu Sans", system-ui, sans-serif;
+  --shadow-panel: 4px 8px 16px 8px #0b0c0f80;
+  --shadow-widget: 4px 12px 24px 0 #1113174d;
+  /* sys/spacing */
+  --sp-xs: 4px; --sp-sm: 8px; --sp-md: 12px; --sp-lg: 16px; --sp-xl: 24px; --sp-2xl: 32px;
+  /* ref / motion */
+  --dur-100: 100ms; --dur-200: 200ms; --dur-300: 300ms; --dur-500: 500ms; --dur-900: 900ms; --dur-1200: 1200ms; --dur-1500: 1500ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 1, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0, 1);
+  --ease-oscillate: cubic-bezier(0.5, 0, 0.5, 1);
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--stage); color: var(--on-surface); font-family: var(--font); font-size: 14px; overflow: hidden; -webkit-font-smoothing: antialiased; }
+* { box-sizing: border-box; }
+img { display: block; max-width: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; text-wrap: balance; }
+svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.sm { width: 18px; height: 18px; }
+svg.i.xs { width: 16px; height: 16px; }
+.tnum { font-variant-numeric: tabular-nums; }
+.t-var { color: var(--on-surface-variant); }
+.t-em { font-weight: 500; }
+.grow { flex: 1; min-width: 0; }
+
+/* 1440×810 fixo: centralizado quando sobra espaço, rola quando falta (nunca escala) */
+.stage { position: fixed; inset: 0; overflow: auto; display: flex; flex-direction: column; padding: var(--sp-xl) var(--sp-lg); }
+.vchips { flex: none; margin: 0 auto var(--sp-lg); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--sp-sm); }
+.vgroup { display: flex; align-items: center; gap: var(--sp-xs); padding: var(--sp-xs); border-radius: 100px; background: var(--container); border: 1px solid var(--divider); }
+.vlabel { padding: 0 var(--sp-sm) 0 var(--sp-md); font-size: 12px; line-height: 16px; color: var(--on-surface-variant); letter-spacing: .3px; }
+.vchip { height: 32px; padding: 0 var(--sp-lg); border-radius: 100px; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .3px; color: var(--on-surface-variant); transition: background-color .15s ease, color .15s ease; }
+.vchip:hover { background: var(--container-high); color: var(--on-surface); }
+.vchip[aria-pressed="true"] { background: var(--input); color: var(--on-surface); box-shadow: inset 0 0 0 1px var(--stroke); }
+.vchip:focus-visible { outline: 2px solid var(--series1); outline-offset: 2px; }
+.vsep { flex: none; width: 6px; height: 6px; margin: 0 var(--sp-xs); border-top: 1.5px solid var(--stroke); border-right: 1.5px solid var(--stroke); transform: rotate(45deg); }
+.app { position: relative; flex: none; margin: 0 auto auto; width: 1440px; height: 810px; background: var(--surface); border-radius: 32px; overflow: hidden; }
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  position: absolute; left: 12px; top: 12px; bottom: 12px; width: 240px; z-index: 6;
+  background: var(--container); border-radius: 24px; box-shadow: var(--shadow-panel);
+  padding: var(--sp-xl) var(--sp-sm); display: flex; flex-direction: column; gap: var(--sp-2xl); overflow: hidden;
+}
+.sidebar .logo { width: 87.5px; height: 20px; align-self: center; }
+.nav { display: flex; flex-direction: column; gap: var(--sp-sm); padding: 0 var(--sp-sm); }
+.nav-label { padding: var(--sp-lg) 2px var(--sp-xs); font-size: 12px; line-height: 16px; letter-spacing: .4px; color: var(--on-surface-variant); }
+.nav-item { position: relative; display: flex; align-items: center; gap: var(--sp-sm); padding: var(--sp-xs) 2px; border-radius: 8px; cursor: pointer; transition: background-color .15s ease; }
+.nav-item .lv { padding: var(--sp-xs); border-radius: 4px; display: grid; place-items: center; }
+.nav-item.sel .lv { background: var(--primary-soft); color: var(--primary); }
+.nav-item .nm { flex: 1; min-width: 0; font-weight: 500; font-size: 14px; line-height: 20px; letter-spacing: .25px; white-space: nowrap; }
+.nav-item.sel::before { content: ""; position: absolute; left: -16px; top: 50%; translate: 0 -50%; width: 4px; height: 24px; background: var(--primary); border-radius: 0 2px 2px 0; }
+.nav-item:not(.sel):hover, .nav-item:not(.sel):active { background: var(--container-high); }
+.nav-item:focus-visible { outline: 2px solid var(--series1); outline-offset: 2px; }
+.nav-item[aria-disabled="true"] { cursor: default; }
+.nav-item[aria-disabled="true"] .nm, .nav-item[aria-disabled="true"] .lv { opacity: .4; }
+.nav-item[aria-disabled="true"]:hover { background: none; }
+/* estado da etapa à direita do item: concluída, em andamento, travada */
+.nav-st { flex: none; width: 18px; height: 18px; display: grid; place-items: center; color: var(--on-surface-variant); margin-right: var(--sp-xs); }
+.nav-st .done { color: var(--success); }
+.nav-st .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--divider); border-top-color: var(--primary); animation: spin 1s linear infinite; }
+.tools .nav-item .lv { color: var(--on-surface-variant); }
+.tools .nav-item .nm { color: var(--on-surface-variant); }
+.app.trial .tools .nav-item .lv, .app.trial .tools .nav-item .nm { color: var(--on-surface); }
+.app.trial .tools .lock { display: none; }
+.sb-foot { margin-top: auto; padding: 0 var(--sp-lg); display: flex; flex-direction: column; gap: var(--sp-md); }
+.privacy { display: flex; gap: var(--sp-sm); align-items: flex-start; font-size: 12px; line-height: 16px; letter-spacing: .4px; color: var(--on-surface-variant); }
+.privacy svg { color: var(--on-surface-variant); }
+.version { font-size: 12px; line-height: 16px; letter-spacing: .4px; color: var(--on-surface-variant); text-align: center; }
+
+/* ---------- Coluna de conteúdo ---------- */
+.content { position: absolute; left: 264px; top: 12px; width: 1164px; bottom: 0; --topbar-inset: 76px; }
+.topbar {
+  position: absolute; left: 0; right: 0; top: 0; z-index: 5; height: 64px; background: var(--container); border-radius: 24px; box-shadow: var(--shadow-panel);
+  padding: var(--sp-md) var(--sp-xl); display: flex; align-items: center; justify-content: space-between; gap: var(--sp-lg);
+}
+.tb-left { display: flex; align-items: center; gap: var(--sp-sm); min-width: 0; }
+.tb-left h1 { font-size: 16px; line-height: 24px; font-weight: 700; letter-spacing: .15px; white-space: nowrap; }
+.tb-left .crumb { font-size: 14px; line-height: 20px; letter-spacing: .25px; color: var(--on-surface-variant); white-space: nowrap; }
+.tb-right { display: flex; align-items: center; gap: var(--sp-lg); }
+.btn-group { display: flex; gap: var(--sp-sm); }
+.icon-btn { position: relative; width: 40px; height: 40px; border-radius: 4px; display: grid; place-items: center; transition: background-color .15s ease; }
+.icon-btn:hover { background: var(--state-hover); }
+.icon-btn:active { background: var(--state-pressed); }
+.icon-btn.outlined { border: 1px solid var(--stroke); }
+.vdiv { width: 1px; height: 16px; background: var(--divider); }
+.link { cursor: pointer; text-decoration: underline; line-height: 20px; letter-spacing: .25px; height: 24px; display: inline-flex; align-items: center; transition: color .15s ease; }
+.link:hover, .link:active { color: var(--on-surface-variant); }
+.app:not(.trial) .trial-chip { display: none; }
+.app.trial .trial-chip { display: inline-flex; }
+.app.trial .tb-cta { display: none; }
+
+.btn {
+  height: 40px; padding: 0 var(--sp-lg); border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-sm);
+  font-weight: 500; font-size: 14px; line-height: 20px; letter-spacing: .1px; white-space: nowrap; flex: none;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.btn.outlined { border: 1px solid var(--stroke); }
+.btn.outlined:hover { background: var(--state-hover); }
+.btn.outlined:active { background: var(--state-pressed); }
+.btn.filled { background: var(--primary); color: var(--on-surface); }
+.btn.filled:hover { background: var(--primary-hover); }
+.btn.filled:active { background: var(--primary-pressed); }
+.btn.lg { height: 48px; padding: 0 var(--sp-xl); font-size: 16px; }
+.btn.block { width: 100%; }
+.btn[aria-disabled="true"], .btn[aria-disabled="true"]:hover { background: var(--input); color: var(--stroke); border-color: transparent; cursor: default; }
+.btn:focus-visible, .icon-btn:focus-visible, .link:focus-visible, .tool-chip:focus-visible, .game:focus-visible, .pill:focus-visible, .plan:focus-visible { outline: 2px solid var(--series1); outline-offset: 2px; }
+
+.main { position: absolute; inset: 0; border-radius: 24px 24px 0 0; background: var(--surface); overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--divider) transparent; }
+.view { position: relative; z-index: 2; min-height: 100%; padding: calc(var(--topbar-inset) + var(--sp-xl)) var(--sp-xl) var(--sp-xl); display: flex; flex-direction: column; gap: var(--sp-xl); }
+.view[hidden] { display: none !important; }
+.view.enter { animation: viewIn var(--dur-300) var(--ease-decelerate); }
+@keyframes viewIn { from { opacity: 0; transform: translateY(8px); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* globo: fica atrás das telas de boas-vindas e de rede; some nas outras */
+.globe-host { position: absolute; top: 0; bottom: 0; right: 0; left: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity var(--dur-500) var(--ease-standard), left var(--dur-900) var(--ease-standard); }
+.app.no-globe .globe-host { background: radial-gradient(40% 50% at 60% 50%, #191d24, transparent 70%); }
+.globe-host canvas { width: 100%; height: 100%; display: block; -webkit-mask: linear-gradient(90deg, transparent, #000 96px); mask: linear-gradient(90deg, transparent, #000 96px); }
+.app[data-view="welcome"] .globe-host { opacity: 1; left: 520px; }
+.app[data-view="network"] .globe-host { opacity: 1; left: 420px; }
+.globe-tags { position: absolute; inset: 0; pointer-events: none; }
+.gtag { position: absolute; left: 0; top: 0; translate: -50% calc(-100% - 12px); display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px;
+  background: #111317e6; box-shadow: var(--shadow-widget); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .4px; white-space: nowrap; transition: opacity var(--dur-200) var(--ease-standard); }
+.gtag .t-var { font-weight: 400; }
+.gtag.below { translate: -50% 12px; }
+.gtag.bad { box-shadow: inset 0 0 0 1px #f5292966, var(--shadow-widget); }
+.gtag.bad b { color: var(--critical-text); font-weight: 500; }
+.gtag[hidden] { display: flex !important; opacity: 0; }
+
+/* ---------- Tipografia de página ---------- */
+.eyebrow { display: inline-flex; align-items: center; gap: var(--sp-sm); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .5px; color: var(--on-surface-variant); }
+.display { font-family: var(--font-display); font-weight: 700; font-size: 44px; line-height: 48px; letter-spacing: -.2px; }
+.h2 { font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 32px; }
+.h3 { font-size: 16px; line-height: 24px; font-weight: 700; letter-spacing: .15px; }
+.body-lg { font-size: 16px; line-height: 24px; letter-spacing: .25px; color: var(--on-surface-variant); }
+.body { font-size: 14px; line-height: 20px; letter-spacing: .25px; }
+.small { font-size: 12px; line-height: 16px; letter-spacing: .4px; }
+.page-header { display: flex; align-items: center; gap: var(--sp-xl); }
+.page-header .rule { flex: 1; height: 1px; background: var(--divider); border-radius: 100px; }
+.page-header h2 { font-size: 22px; line-height: 28px; font-weight: 700; white-space: nowrap; }
+
+/* ---------- Componentes ---------- */
+.widget { background: var(--container); border-radius: 8px; box-shadow: var(--shadow-widget); padding: var(--sp-xl); display: flex; flex-direction: column; gap: var(--sp-lg); min-width: 0; }
+.w-head { min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-lg); }
+.w-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-sm); }
+.w-title h4 { font-size: 16px; line-height: 24px; font-weight: 700; letter-spacing: .15px; white-space: nowrap; }
+.badge { display: inline-flex; align-items: center; gap: var(--sp-xs); padding: var(--sp-xs) var(--sp-sm); border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .5px; white-space: nowrap; flex: none; }
+.badge.success { background: var(--success-container); color: var(--success); }
+.badge.warning { background: var(--warning-container); color: var(--warning); }
+.badge.critical { background: var(--primary-soft); color: var(--critical-text); }
+.badge.neutral { background: var(--container-high); color: var(--on-surface); }
+.badge.isp { background: var(--isp-container); color: var(--isp); }
+.dot { width: 8px; height: 8px; border-radius: 100px; background: currentColor; flex: none; }
+.live-dot { width: 8px; height: 8px; border-radius: 100px; background: var(--primary); animation: blink var(--dur-1200) var(--ease-oscillate) infinite; }
+@keyframes blink { 50% { opacity: .4; } }
+.divider { height: 1px; background: var(--divider); border-radius: 100px; }
+.pill { height: 32px; padding: 0 var(--sp-md); border-radius: 100px; background: var(--input); border: 1px solid var(--stroke); display: inline-flex; align-items: center; gap: var(--sp-xs); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .5px; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
+.pill:hover { background: var(--container-high); border-color: var(--on-surface-variant); }
+.pill[aria-pressed="true"] { background: var(--container-high); border-color: var(--on-surface); }
+/* ferramenta ExitLag que resolve um problema: chip com cadeado enquanto não há teste grátis */
+.tool-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 8px; border-radius: 4px; background: var(--container-high); border: 1px solid var(--divider); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .4px; white-space: nowrap; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
+.tool-chip:hover { background: var(--input); border-color: var(--stroke); }
+.tool-chip .lock { color: var(--on-surface-variant); }
+.app.trial .tool-chip .lock { display: none; }
+.tool-chip.applied { color: var(--success); border-color: #22eba340; }
+.tool-chip.applied .lock { display: none; }
+.tool-chip.free { cursor: default; color: var(--on-surface-variant); }
+.tool-chip.free:hover { background: var(--container-high); border-color: var(--divider); }
+
+/* skeleton: degradê varrendo em 1500 ms linear */
+.sk { position: relative; color: transparent !important; border-radius: 4px; }
+.sk > * { visibility: hidden; }
+.sk::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(87.44deg, #191d24 30%, #2a2f39 60%, #191d24 100%) 0 0 / 300% 100%; animation: skSweep var(--dur-1500) linear infinite; }
+@keyframes skSweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
+/* ---------- Boas-vindas ---------- */
+#view-welcome { justify-content: center; padding-left: var(--sp-2xl); }
+.wl { width: 480px; display: flex; flex-direction: column; gap: var(--sp-xl); }
+.wl .lead { display: flex; flex-direction: column; gap: var(--sp-md); }
+.wl-cards { display: flex; flex-direction: column; gap: var(--sp-lg); }
+.an-card { display: flex; gap: var(--sp-lg); align-items: flex-start; padding: var(--sp-lg) var(--sp-xl) var(--sp-lg) var(--sp-lg); border-radius: 8px; background: var(--container); box-shadow: var(--shadow-widget); cursor: pointer; transition: background-color .15s ease, box-shadow .15s ease; text-align: left; width: 100%; }
+.an-card:hover { background: var(--container-high); box-shadow: var(--shadow-widget), inset 0 0 0 1px var(--divider); }
+.an-card:focus-visible { outline: 2px solid var(--series1); outline-offset: 2px; }
+.an-ic { width: 48px; height: 48px; border-radius: 8px; background: var(--input); display: grid; place-items: center; flex: none; }
+.an-card .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-xs); }
+.an-card .row { display: flex; align-items: center; gap: var(--sp-sm); }
+.an-card .row h3 { flex: 1; }
+.wl-actions { display: flex; align-items: center; gap: var(--sp-lg); }
+.wl-foot { display: flex; gap: var(--sp-xl); }
+.wl-foot span { display: inline-flex; align-items: center; gap: 6px; }
+.origin-tag { position: absolute; z-index: 2; right: var(--sp-xl); bottom: var(--sp-xl); display: flex; align-items: center; gap: var(--sp-sm); padding: var(--sp-sm) var(--sp-md); border-radius: 8px; background: #111317cc; box-shadow: var(--shadow-widget); }
+
+/* ---------- Hardware ---------- */
+.hw { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: var(--sp-xl); align-items: start; }
+.parts { padding: var(--sp-sm) 0; gap: 0; }
+.parts .w-head { padding: 0 var(--sp-xl) var(--sp-sm); }
+.part { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: var(--sp-lg); align-items: center; padding: var(--sp-md) var(--sp-xl); }
+.part + .part::before { content: ""; position: absolute; left: var(--sp-xl); right: var(--sp-xl); top: 0; height: 1px; background: var(--divider); }
+.part .pic { width: 40px; height: 40px; border-radius: 8px; background: var(--input); display: grid; place-items: center; color: var(--on-surface); }
+.part .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.part .lbl { font-size: 12px; line-height: 16px; letter-spacing: .4px; color: var(--on-surface-variant); }
+.part .val { font-weight: 500; line-height: 20px; letter-spacing: .25px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.part .sub { font-size: 12px; line-height: 16px; letter-spacing: .4px; color: var(--on-surface-variant); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.part .sk { display: inline-block; min-width: 180px; height: 16px; }
+.part.reading .pic { color: var(--primary); }
+.part.reading::after { content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none;
+  background: linear-gradient(90deg, #f5292900 0%, #f5292914 50%, #f5292900 100%) 0 0 / 40% 100% no-repeat; animation: readSweep 900ms var(--ease-standard) infinite; }
+@keyframes readSweep { from { background-position: -60% 0; } to { background-position: 160% 0; } }
+.part .st { min-width: 96px; display: flex; justify-content: flex-end; }
+.part.in .val, .part.in .sub, .part.in .st { animation: fadeIn var(--dur-300) var(--ease-decelerate); }
+@keyframes fadeIn { from { opacity: 0; transform: translateX(6px); } }
+.hw-side { display: flex; flex-direction: column; gap: var(--sp-xl); }
+/* tier: barra em três faixas com o marcador correndo até a nota da máquina */
+.tier .name { font-family: var(--font-display); font-weight: 700; font-size: 32px; line-height: 36px; }
+.tier .score { display: flex; align-items: baseline; gap: var(--sp-xs); }
+.tier .score b { font-family: var(--font-display); font-size: 32px; line-height: 36px; font-weight: 700; }
+.scale { position: relative; padding-top: 18px; }
+.scale .bands { display: grid; grid-template-columns: 40fr 35fr 25fr; gap: 4px; }
+.scale .bands i { height: 8px; border-radius: 100px; background: var(--input); transition: background-color var(--dur-500) var(--ease-standard); }
+.scale .bands i.on { background: linear-gradient(90deg, #555c68, #ebeced); }
+.scale .labels { display: grid; grid-template-columns: 40fr 35fr 25fr; gap: 4px; margin-top: var(--sp-sm); font-size: 12px; line-height: 16px; letter-spacing: .4px; color: var(--on-surface-variant); }
+.scale .labels span.on { color: var(--on-surface); font-weight: 500; }
+.scale .mk { position: absolute; top: 0; left: 0; width: 2px; height: 34px; background: var(--on-surface); border-radius: 2px; translate: -1px 0; transition: left var(--dur-900) var(--ease-standard); }
+.scale .mk::before { content: ""; position: absolute; left: 50%; top: -2px; width: 10px; height: 10px; border-radius: 50%; translate: -50% 0; background: var(--on-surface); box-shadow: 0 0 0 4px #ebeced26; }
+.verdict { line-height: 20px; letter-spacing: .25px; color: var(--on-surface-variant); }
+.find-list { display: flex; flex-direction: column; gap: var(--sp-md); }
+.find { display: flex; gap: var(--sp-md); padding: var(--sp-lg); border-radius: 8px; background: var(--container-high); }
+.find .sev { width: 4px; align-self: stretch; border-radius: 100px; flex: none; }
+.find .sev.critical { background: linear-gradient(180deg, var(--primary), #f5292933); }
+.find .sev.warning { background: linear-gradient(180deg, var(--warning), #eed80e33); }
+.find .sev.success { background: linear-gradient(180deg, var(--success), #22eba333); }
+.find .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-sm); }
+.find .ttl { display: flex; align-items: center; gap: var(--sp-sm); }
+.find .ttl b { flex: 1; min-width: 0; font-weight: 500; line-height: 20px; letter-spacing: .25px; }
+.find .desc { font-size: 12px; line-height: 16px; letter-spacing: .4px; color: var(--on-surface-variant); }
+.find .fixes { display: flex; flex-wrap: wrap; gap: var(--sp-sm); }
+.find.in { animation: viewIn var(--dur-300) var(--ease-decelerate) both; }
+/* compra sugerida: peça ultrapassada, oferta da loja parceira */
+.upgrade { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: var(--sp-lg); padding: var(--sp-lg); border-radius: 8px; background: var(--container-high); }
+.upgrade .art { width: 88px; height: 88px; border-radius: 8px; background: radial-gradient(120% 90% at 30% 20%, #2a2f39, #111317); display: grid; place-items: center; color: var(--on-surface); }
+.upgrade .art svg { width: 44px; height: 44px; stroke-width: 1.2; }
+.upgrade .txt { display: flex; flex-direction: column; gap: var(--sp-xs); min-width: 0; }
+.upgrade .price { display: flex; align-items: baseline; gap: var(--sp-sm); }
+.upgrade .price b { font-family: var(--font-display); font-size: 24px; line-height: 28px; font-weight: 700; }
+.upgrade .price s { color: var(--on-surface-variant); font-size: 12px; }
+.upgrade .row { display: flex; align-items: center; gap: var(--sp-sm); margin-top: var(--sp-xs); }
+.hw-run { display: flex; align-items: center; gap: var(--sp-md); }
+.progress { height: 4px; border-radius: 100px; background: var(--divider); overflow: hidden; }
+.progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #f5292966, var(--primary)); border-radius: 100px; transition: width var(--dur-300) linear; }
+.next-step { display: flex; align-items: center; gap: var(--sp-lg); }
+.next-step .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-xs); }
+
+/* ---------- Rede ---------- */
+#view-network { padding-right: 0; }
+.net { width: 372px; display: flex; flex-direction: column; gap: var(--sp-xl); }
+.games { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-sm); }
+.game { min-width: 0; display: flex; flex-direction: column; gap: 6px; text-align: left; border-radius: 8px; padding: 4px; transition: background-color .15s ease; }
+.game:hover { background: var(--container-high); }
+.game .cv { width: 100%; aspect-ratio: 3 / 4; border-radius: 6px; background: center / cover no-repeat var(--container-high); position: relative; }
+.game[aria-pressed="true"] .cv { box-shadow: 0 0 0 2px var(--on-surface); }
+.game .nm { font-size: 12px; line-height: 16px; letter-spacing: .4px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.servers { display: flex; flex-wrap: wrap; gap: var(--sp-sm); }
+.phases { display: flex; gap: var(--sp-xs); }
+.phase { flex: 1; display: flex; flex-direction: column; gap: 6px; font-size: 12px; line-height: 16px; letter-spacing: .4px; color: var(--on-surface-variant); }
+.phase i { height: 4px; border-radius: 100px; background: var(--divider); overflow: hidden; position: relative; }
+.phase i::after { content: ""; position: absolute; inset: 0; width: var(--p, 0%); background: var(--c, var(--on-surface)); border-radius: 100px; transition: width var(--dur-300) linear; }
+.phase.on { color: var(--on-surface); font-weight: 500; }
+.phase.isp { --c: var(--isp); }
+.phase.xl { --c: var(--success); }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-md); }
+.kpi { padding: var(--sp-md); border-radius: 8px; background: var(--container-high); display: flex; flex-direction: column; gap: 6px; }
+.kpi .lb { font-size: 12px; line-height: 16px; letter-spacing: .4px; color: var(--on-surface-variant); }
+.kpi .vals { display: flex; align-items: baseline; gap: var(--sp-md); }
+.kpi .v { font-family: var(--font-display); font-size: 24px; line-height: 28px; font-weight: 700; }
+.kpi .v small { font-family: var(--font); font-size: 12px; font-weight: 500; color: var(--on-surface-variant); margin-left: 2px; }
+.kpi .v.isp-c::before, .kpi .v.xl-c::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; translate: 0 -3px; }
+.kpi .v.isp-c::before { background: var(--isp); }
+.kpi .v.xl-c::before { background: var(--success); }
+.kpi .v.xl-c { color: var(--on-surface); }
+.chart { position: relative; height: 72px; border-radius: 8px; background: var(--container-high); overflow: hidden; }
+.chart svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.chart .ax { position: absolute; right: 8px; font-size: 11px; line-height: 12px; color: var(--on-surface-variant); }
+.legend { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 12px; line-height: 16px; letter-spacing: .4px; }
+.legend .sw { width: 10px; height: 2px; border-radius: 2px; }
+.hops { display: flex; flex-direction: column; }
+.hop { display: grid; grid-template-columns: 20px minmax(0, 1fr) 56px 48px; gap: var(--sp-sm); align-items: center; padding: 6px 0; font-size: 12px; line-height: 16px; letter-spacing: .4px; }
+.hop + .hop { border-top: 1px solid var(--divider); }
+.hop .n { color: var(--on-surface-variant); }
+.hop .h { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hop .ms, .hop .ls { text-align: right; }
+.hop.bad .h, .hop.bad .ls { color: var(--critical-text); }
+.hop.in { animation: fadeIn var(--dur-300) var(--ease-decelerate); }
+.net-head { position: absolute; z-index: 3; left: 444px; right: var(--sp-xl); top: calc(var(--topbar-inset) + var(--sp-xl)); display: flex; align-items: center; gap: var(--sp-md); pointer-events: none; }
+.net-head > * { pointer-events: auto; }
+.route-lbl { font-weight: 500; line-height: 20px; letter-spacing: .25px; }
+.route-lbl .t-var { margin-left: var(--sp-sm); font-weight: 400; }
+.net-legend { position: absolute; z-index: 3; left: 444px; bottom: var(--sp-xl); display: flex; gap: var(--sp-lg); padding: var(--sp-sm) var(--sp-md); border-radius: 8px; background: #111317cc; }
+.app:not([data-view="network"]) .net-head, .app:not([data-view="network"]) .net-legend { display: none; }
+.cmp { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 20px; letter-spacing: .25px; }
+.cmp th { font-size: 12px; line-height: 16px; letter-spacing: .4px; font-weight: 500; color: var(--on-surface-variant); text-align: right; padding: 0 0 var(--sp-sm); }
+.cmp th:first-child, .cmp td:first-child { text-align: left; }
+.cmp td { padding: var(--sp-sm) 0; text-align: right; border-top: 1px solid var(--divider); }
+.cmp td.gain { color: var(--success); font-size: 12px; font-weight: 500; }
+#view-network { height: 100%; min-height: 0; padding-bottom: 0; }
+.net { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; padding-bottom: var(--sp-xl); }
+.net-stage[hidden] { display: none !important; }
+.net-stage { display: flex; flex-direction: column; gap: var(--sp-xl); }
+
+/* ---------- Relatório ---------- */
+.rp-top { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-xl); }
+.score-card { display: flex; gap: var(--sp-lg); align-items: center; }
+.ring { position: relative; width: 88px; height: 88px; flex: none; }
+.ring svg { width: 88px; height: 88px; rotate: -90deg; }
+.ring .val { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 26px; font-weight: 700; }
+.ring circle { fill: none; stroke-width: 6; }
+.ring .bg { stroke: var(--input); }
+.ring .fg { stroke: url(#ringGrad); stroke-linecap: round; transition: stroke-dashoffset var(--dur-900) var(--ease-standard); }
+.score-card .txt { display: flex; flex-direction: column; gap: var(--sp-xs); min-width: 0; }
+.rp { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: var(--sp-xl); align-items: start; }
+.rp-side { display: flex; flex-direction: column; gap: var(--sp-xl); position: sticky; top: calc(var(--topbar-inset) + var(--sp-xl)); }
+.cta-panel { gap: var(--sp-lg); }
+.fix-list { display: flex; flex-direction: column; gap: var(--sp-sm); }
+.fix-row { display: flex; align-items: center; gap: var(--sp-md); padding: var(--sp-sm) 0; }
+.fix-row + .fix-row { border-top: 1px solid var(--divider); }
+.fix-row .ic { width: 36px; height: 36px; border-radius: 8px; background: var(--input); display: grid; place-items: center; flex: none; }
+.fix-row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fix-row .txt b { font-weight: 500; line-height: 20px; letter-spacing: .25px; }
+.empty { display: flex; flex-direction: column; align-items: center; gap: var(--sp-md); text-align: center; padding: var(--sp-2xl); }
+
+/* ---------- Modal (comp / modal: dialog com escala + opacidade) ---------- */
+.md-overlay { position: absolute; inset: 0; z-index: 300; background: #0b0c0fd9; opacity: 0; transition: opacity var(--dur-200) var(--ease-accelerate); }
+.md-overlay.show { opacity: 1; transition: opacity var(--dur-300) var(--ease-decelerate); }
+.modal { position: absolute; z-index: 400; left: 50%; top: 50%; width: 760px; display: flex; flex-direction: column; background: var(--container); border-radius: 16px; box-shadow: var(--shadow-panel); overflow: hidden;
+  transform: translate(-50%, -50%) scale(.8); opacity: 0; transition: transform var(--dur-200) var(--ease-accelerate), opacity var(--dur-200) var(--ease-accelerate); }
+.modal.show { transform: translate(-50%, -50%) scale(1); opacity: 1; transition: transform var(--dur-300) var(--ease-decelerate), opacity var(--dur-300) var(--ease-decelerate); }
+.md-body { display: flex; flex-direction: column; gap: var(--sp-xl); padding: var(--sp-xl); }
+.md-head { display: flex; align-items: flex-start; gap: var(--sp-lg); }
+.md-head .txt { flex: 1; display: flex; flex-direction: column; gap: var(--sp-xs); }
+.md-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-lg); padding: var(--sp-lg) var(--sp-xl); border-top: 1px solid var(--divider); }
+.md-foot .note { flex: 1; }
+.plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-lg); }
+.plan { position: relative; display: flex; flex-direction: column; gap: var(--sp-sm); padding: var(--sp-lg); border-radius: 8px; background: var(--container-high); text-align: left; box-shadow: inset 0 0 0 1px var(--divider); transition: box-shadow .15s ease, background-color .15s ease; }
+.plan:hover { background: var(--input); }
+.plan[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--on-surface); }
+.plan .pr { display: flex; align-items: baseline; gap: var(--sp-xs); }
+.plan .pr b { font-family: var(--font-display); font-size: 28px; line-height: 32px; font-weight: 700; }
+.plan .badge { position: absolute; right: var(--sp-md); top: var(--sp-md); }
+.unlocks { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-sm) var(--sp-xl); }
+.unlocks span { display: flex; align-items: center; gap: var(--sp-sm); line-height: 20px; letter-spacing: .25px; }
+.unlocks svg { color: var(--success); }
+.md-done { align-items: center; text-align: center; padding: var(--sp-2xl) var(--sp-xl); }
+.md-done .ok { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--success-container); color: var(--success); }
+
+/* snackbar */
+.snackbar { position: absolute; right: var(--sp-xl); bottom: var(--sp-xl); z-index: 600; width: 340px; border-radius: 8px; overflow: hidden; background: var(--input); box-shadow: var(--shadow-panel);
+  transform: translateY(calc(100% + 24px)); transition: transform var(--dur-200) var(--ease-accelerate); }
+.snackbar.show { transform: none; transition: transform var(--dur-200) var(--ease-decelerate); }
+.sb-content { display: flex; align-items: flex-start; gap: var(--sp-sm); padding: var(--sp-md); }
+.sb-content svg { color: var(--success); }
+.sb-body { flex: 1; display: flex; flex-direction: column; gap: var(--sp-xs); }
+.sb-title { font-weight: 500; line-height: 20px; letter-spacing: .25px; }
+.sb-progress { height: 4px; background: var(--divider); }
+.sb-progress i { display: block; height: 100%; background: var(--success); transform-origin: left; }
+
+/* tooltip */
+.tip { position: absolute; z-index: 700; max-width: 260px; background: var(--input); padding: var(--sp-sm); border-radius: 4px; box-shadow: var(--shadow-panel); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .5px; pointer-events: none; opacity: 0; transition: opacity .12s ease; }
+.tip.show { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#555c68"/><stop offset="1" stop-color="#ebeced"/></linearGradient>
+    <symbol id="i-overview" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-pc" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+    <symbol id="i-net" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.6 5.4 3.6 8.5s-1.1 5.9-3.6 8.5c-2.5-2.6-3.6-5.4-3.6-8.5S9.5 6.1 12 3.5z"/></symbol>
+    <symbol id="i-report" viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5M9.5 17v-3M12.5 17v-5M15.5 17v-2"/></symbol>
+    <symbol id="i-route" viewBox="0 0 24 24"><circle cx="5.5" cy="18" r="2"/><circle cx="18.5" cy="6" r="2"/><path d="M7.5 18h7a3 3 0 0 0 0-6h-5a3 3 0 0 1 0-6h7"/></symbol>
+    <symbol id="i-boost" viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></symbol>
+    <symbol id="i-broom" viewBox="0 0 24 24"><path d="M14.5 3.5 11 10M7 11.5h8l2 9H5z"/><path d="M9 15.5v5M13 15.5v5"/></symbol>
+    <symbol id="i-dns" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M7.5 7h.01M7.5 17h.01M11 7h5M11 17h5"/></symbol>
+    <symbol id="i-multi" viewBox="0 0 24 24"><path d="M3.5 9a12 12 0 0 1 17 0M6.5 12.5a7.5 7.5 0 0 1 11 0M9.5 16a3 3 0 0 1 5 0"/><path d="M12 19.5h.01"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12.3 2.5 2.5 4.7-5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17h.01"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 5 6v5.5c0 4.3 3 7.7 7 9 4-1.3 7-4.7 7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/><rect x="9.5" y="9.5" width="5" height="5" rx=".5"/><path d="M9 3v3M12 3v3M15 3v3M9 18v3M12 18v3M15 18v3M3 9h3M3 12h3M3 15h3M18 9h3M18 12h3M18 15h3"/></symbol>
+    <symbol id="i-gpu" viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="10" rx="1.5"/><circle cx="9" cy="11.5" r="2.8"/><circle cx="16" cy="11.5" r="2.8"/><path d="M5 16.5v3M8 16.5v3M11 16.5v3"/></symbol>
+    <symbol id="i-ram" viewBox="0 0 24 24"><rect x="2.5" y="7" width="19" height="9" rx="1"/><path d="M6 10v3M9.5 10v3M13 10v3M16.5 10v3M4.5 16v2.5M19.5 16v2.5M10 18.5h4"/></symbol>
+    <symbol id="i-disk" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="12" cy="12" r="3.5"/><path d="M12 12h.01M17 8h.01"/></symbol>
+    <symbol id="i-display" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="13" rx="1.5"/><path d="M9 20.5h6M12 17v3.5"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0"/><path d="M12 19.5h.01"/></symbol>
+    <symbol id="i-cable" viewBox="0 0 24 24"><rect x="7" y="3.5" width="10" height="8" rx="1"/><path d="M9.5 3.5v3M12 3.5v3M14.5 3.5v3M12 11.5V17a3.5 3.5 0 0 0 7 0v-1"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8.5 6.5h12M8.5 12h12M8.5 17.5h12M4 6.5h.01M4 12h.01M4 17.5h.01"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v8M7 6.3a7.5 7.5 0 1 0 10 0"/></symbol>
+    <symbol id="i-windows" viewBox="0 0 24 24"><path d="M3.5 5.5 10.5 4.5v7h-7zM13 4.2l7.5-1v8.3H13zM3.5 13h7v7l-7-1zM13 13h7.5v8.3l-7.5-1z"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2.5l2.2 11h10.6l2-7.5H7"/><circle cx="9" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+    <symbol id="i-min" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.5a2.4 2.4 0 1 1 3.3 2.2c-.7.3-1 .8-1 1.5v.3M12 16.5h.01"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.8-6.5-11a6.5 6.5 0 0 1 13 0c0 5.2-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15"/></symbol>
+  </defs>
+</svg>
+
+<div class="stage">
+  <div class="vchips">
+    <nav class="vgroup" aria-label="Prototype: jump to a step">
+      <span class="vlabel">Flow</span>
+      <button class="vchip" type="button" data-jump="welcome" aria-pressed="true">Welcome</button><span class="vsep" aria-hidden="true"></span>
+      <button class="vchip" type="button" data-jump="hardware" aria-pressed="false">Hardware</button><span class="vsep" aria-hidden="true"></span>
+      <button class="vchip" type="button" data-jump="network" aria-pressed="false">Network</button><span class="vsep" aria-hidden="true"></span>
+      <button class="vchip" type="button" data-jump="report" aria-pressed="false">Report</button>
+    </nav>
+    <div class="vgroup" role="group" aria-label="Prototype: simulated PC">
+      <span class="vlabel">Simulated PC</span>
+      <button class="vchip" type="button" data-profile="low" aria-pressed="false">Low end</button>
+      <button class="vchip" type="button" data-profile="mid" aria-pressed="true">Mid range</button>
+      <button class="vchip" type="button" data-profile="high" aria-pressed="false">High end</button>
+    </div>
+  </div>
+
+  <div class="app" id="app" data-view="welcome">
+    <aside class="sidebar">
+      <img class="logo" src="logo.svg" alt="ExitLag">
+      <nav class="nav" aria-label="Analysis">
+        <div class="nav-item sel" tabindex="0" role="link" data-go="welcome" aria-current="page"><span class="lv"><svg class="i"><use href="#i-overview"/></svg></span><span class="nm">Overview</span><span class="nav-st"></span></div>
+        <div class="nav-item" tabindex="0" role="link" data-go="hardware"><span class="lv"><svg class="i"><use href="#i-pc"/></svg></span><span class="nm">Hardware analysis</span><span class="nav-st" data-st="hardware"></span></div>
+        <div class="nav-item" tabindex="0" role="link" data-go="network"><span class="lv"><svg class="i"><use href="#i-net"/></svg></span><span class="nm">Network analysis</span><span class="nav-st" data-st="network"></span></div>
+        <div class="nav-item" tabindex="0" role="link" data-go="report"><span class="lv"><svg class="i"><use href="#i-report"/></svg></span><span class="nm">Your report</span><span class="nav-st" data-st="report"></span></div>
+        <div class="tools">
+          <div class="nav-label">ExitLag tools</div>
+          <div class="nav" style="padding:0">
+            <div class="nav-item" tabindex="0" role="button" data-tool="route"><span class="lv"><svg class="i"><use href="#i-route"/></svg></span><span class="nm">Route Optimizer</span><span class="nav-st lock"><svg class="i xs"><use href="#i-lock"/></svg></span></div>
+            <div class="nav-item" tabindex="0" role="button" data-tool="fps"><span class="lv"><svg class="i"><use href="#i-boost"/></svg></span><span class="nm">FPS Boost</span><span class="nav-st lock"><svg class="i xs"><use href="#i-lock"/></svg></span></div>
+            <div class="nav-item" tabindex="0" role="button" data-tool="ram"><span class="lv"><svg class="i"><use href="#i-broom"/></svg></span><span class="nm">RAM Cleaner</span><span class="nav-st lock"><svg class="i xs"><use href="#i-lock"/></svg></span></div>
+            <div class="nav-item" tabindex="0" role="button" data-tool="dns"><span class="lv"><svg class="i"><use href="#i-dns"/></svg></span><span class="nm">DNS Optimizer</span><span class="nav-st lock"><svg class="i xs"><use href="#i-lock"/></svg></span></div>
+            <div class="nav-item" tabindex="0" role="button" data-tool="multi"><span class="lv"><svg class="i"><use href="#i-multi"/></svg></span><span class="nm">Multi Internet</span><span class="nav-st lock"><svg class="i xs"><use href="#i-lock"/></svg></span></div>
+          </div>
+        </div>
+      </nav>
+      <div class="sb-foot">
+        <p class="privacy"><svg class="i sm"><use href="#i-shield"/></svg><span>No account needed. Your results stay on this PC.</span></p>
+        <div class="version">analyzer | 0.1</div>
+      </div>
+    </aside>
+
+    <div class="content">
+      <header class="topbar">
+        <div class="tb-left"><h1 id="tbTitle">Overview</h1><span class="crumb" id="tbCrumb">Free check-up</span></div>
+        <div class="tb-right">
+          <span class="badge success trial-chip"><span class="dot"></span>Free trial · 3 days left</span>
+          <button class="link" type="button" id="signIn">Sign in</button>
+          <button class="btn filled tb-cta" type="button" data-paywall="trial">Start free trial</button>
+          <span class="vdiv"></span>
+          <div class="btn-group">
+            <button class="icon-btn" type="button" aria-label="Help Center" data-tip="Help Center"><svg class="i"><use href="#i-help"/></svg></button>
+            <button class="icon-btn" type="button" aria-label="Minimize"><svg class="i"><use href="#i-min"/></svg></button>
+            <button class="icon-btn" type="button" aria-label="Close"><svg class="i"><use href="#i-close"/></svg></button>
+          </div>
+        </div>
+      </header>
+
+      <main class="main" id="main">
+        <div class="globe-host" id="globeHost"><canvas id="globe" role="img" aria-label="Globe with your location and the routes to the game server"></canvas><div class="globe-tags" id="gTags"></div></div>
+
+        <!-- ================= BOAS-VINDAS ================= -->
+        <section class="view" id="view-welcome" aria-labelledby="wlTitle">
+          <div class="wl">
+            <div class="lead">
+              <span class="eyebrow"><svg class="i xs"><use href="#i-clock"/></svg>Free check-up · about 1 minute · no account</span>
+              <h2 class="display" id="wlTitle">Find out what's slowing your games down.</h2>
+              <p class="body-lg">We look at your PC and at your connection to the game server, then show you what's causing lag and stutter and how to fix it.</p>
+            </div>
+            <div class="wl-cards">
+              <button class="an-card" type="button" data-go="hardware">
+                <span class="an-ic"><svg class="i"><use href="#i-pc"/></svg></span>
+                <span class="txt">
+                  <span class="row"><h3 class="h3">Hardware analysis</h3><span id="wlHwSt" class="badge neutral">About 15 s</span></span>
+                  <span class="body t-var">Reads your CPU, graphics card, memory, storage and display, and tells you what kind of gaming PC you have.</span>
+                </span>
+              </button>
+              <button class="an-card" type="button" data-go="network">
+                <span class="an-ic"><svg class="i"><use href="#i-net"/></svg></span>
+                <span class="txt">
+                  <span class="row"><h3 class="h3">Network analysis</h3><span id="wlNetSt" class="badge neutral">About 30 s</span></span>
+                  <span class="body t-var">Tests your connection to a game server, first as it is today and then through ExitLag, and compares the two.</span>
+                </span>
+              </button>
+            </div>
+            <div class="wl-actions">
+              <button class="btn filled lg" type="button" id="startAll">Start check-up</button>
+              <button class="link" type="button" data-go="report" id="wlReport" hidden>See your report</button>
+            </div>
+          </div>
+          <div class="origin-tag small"><svg class="i xs"><use href="#i-pin"/></svg><span class="t-var">Testing from</span><span class="t-em" id="originName"></span></div>
+        </section>
+
+        <!-- ================= HARDWARE ================= -->
+        <section class="view" id="view-hardware" hidden aria-labelledby="hwTitle">
+          <div class="page-header"><h2 id="hwTitle">Hardware analysis</h2><span class="rule"></span>
+            <div class="hw-run" id="hwRun"><span class="small t-var tnum" id="hwStatus">Not run yet</span><button class="btn outlined" type="button" id="hwAgain" hidden><svg class="i"><use href="#i-redo"/></svg>Run again</button></div>
+          </div>
+          <div class="progress" id="hwProg" hidden><i></i></div>
+          <div class="hw">
+            <div class="widget parts" id="parts">
+              <div class="w-head"><div class="w-title"><svg class="i"><use href="#i-pc"/></svg><h4>Your PC</h4></div><span class="small t-var" id="partsCount"></span></div>
+            </div>
+            <div class="hw-side">
+              <div class="widget tier" id="tier">
+                <div class="w-head"><div class="w-title"><h4>Machine type</h4></div><span class="badge neutral" id="tierBadge">Waiting</span></div>
+                <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+                  <span class="name" id="tierName">–</span>
+                  <span class="score"><b class="tnum" id="tierScore">–</b><span class="t-var small">/ 100</span></span>
+                </div>
+                <div class="scale"><span class="mk" id="tierMk" style="left:0%"></span>
+                  <div class="bands"><i data-b="0"></i><i data-b="1"></i><i data-b="2"></i></div>
+                  <div class="labels"><span data-b="0">Low end</span><span data-b="1">Mid range</span><span data-b="2">High end</span></div>
+                </div>
+                <p class="verdict" id="tierVerdict">Run the analysis to see where your PC stands.</p>
+              </div>
+              <div class="widget" id="hwFindW">
+                <div class="w-head"><div class="w-title"><svg class="i"><use href="#i-alert"/></svg><h4>What we found</h4></div><span class="small t-var" id="hwFindCount"></span></div>
+                <div class="find-list" id="hwFind"><p class="body t-var">Findings show up here as each part is read.</p></div>
+              </div>
+              <div class="widget" id="upW" hidden>
+                <div class="w-head"><div class="w-title"><svg class="i"><use href="#i-cart"/></svg><h4>Upgrade worth making</h4></div><span class="badge neutral">Partner offer</span></div>
+                <div id="upList" class="find-list"></div>
+                <p class="small t-var">Optimization can't make up for a part this old. We picked the best price we found today at our partner store.</p>
+              </div>
+              <div class="widget next-step" id="hwNext" hidden>
+                <div class="txt"><b class="h3">Next: your connection</b><span class="body t-var" id="hwNextTxt">Lag also comes from the route to the game server. Test it next.</span></div>
+                <button class="btn filled" type="button" data-go="network">Test network</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= REDE ================= -->
+        <section class="view" id="view-network" hidden aria-labelledby="netTitle">
+          <div class="net">
+            <div class="page-header"><h2 id="netTitle">Network analysis</h2><span class="rule"></span></div>
+
+            <!-- escolha do jogo e do servidor -->
+            <div class="net-stage" id="netSetup">
+              <div class="vcol" style="display:flex;flex-direction:column;gap:12px">
+                <span class="h3">Pick a game</span>
+                <span class="small t-var">Found on this PC</span>
+                <div class="games" id="games"></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <span class="h3">Game server</span>
+                <div class="servers" id="servers"></div>
+              </div>
+              <p class="body t-var">We'll test your connection as it is now, then the same server through ExitLag. Keep the game closed while it runs.</p>
+              <button class="btn filled lg block" type="button" id="netRun">Run network test</button>
+            </div>
+
+            <!-- medição ao vivo -->
+            <div class="net-stage" id="netLive" hidden>
+              <div class="phases" id="phases">
+                <div class="phase isp" data-ph="0"><i></i><span>1 · Your connection</span></div>
+                <div class="phase xl" data-ph="1"><i></i><span>2 · With ExitLag</span></div>
+                <div class="phase" data-ph="2"><i></i><span>3 · Compare</span></div>
+              </div>
+              <div class="kpis">
+                <div class="kpi"><span class="lb">Ping</span><div class="vals"><span class="v isp-c tnum" id="kPingI">–<small>ms</small></span><span class="v xl-c tnum" id="kPingX" hidden>–<small>ms</small></span></div></div>
+                <div class="kpi"><span class="lb">Jitter</span><div class="vals"><span class="v isp-c tnum" id="kJitI">–<small>ms</small></span><span class="v xl-c tnum" id="kJitX" hidden>–<small>ms</small></span></div></div>
+                <div class="kpi"><span class="lb">Packet loss</span><div class="vals"><span class="v isp-c tnum" id="kLossI">–<small>%</small></span><span class="v xl-c tnum" id="kLossX" hidden>–<small>%</small></span></div></div>
+                <div class="kpi"><span class="lb" data-tip="Moments when ping jumps well above its average. You feel them as sudden lag.">Lag spikes</span><div class="vals"><span class="v isp-c tnum" id="kSpkI">–</span><span class="v xl-c tnum" id="kSpkX" hidden>–</span></div></div>
+              </div>
+              <div class="chart" id="chart" aria-label="Live ping chart">
+                <svg viewBox="0 0 372 72" preserveAspectRatio="none" role="img" aria-label="Ping over time">
+                  <path id="pIsp" fill="none" stroke="#eb8322" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+                  <path id="pXl" fill="none" stroke="#22eba3" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+                </svg>
+                <span class="ax" style="top:6px" id="axTop"></span><span class="ax" style="bottom:6px">0 ms</span>
+              </div>
+              <div class="widget" style="padding:16px;gap:8px">
+                <div class="w-head" style="min-height:24px"><div class="w-title"><h4 id="hopsTitle">Route, hop by hop</h4></div><span class="small t-var">ms · loss</span></div>
+                <div class="hops" id="hops"></div>
+              </div>
+            </div>
+
+            <!-- resultado -->
+            <div class="net-stage" id="netDone" hidden>
+              <div class="widget" style="padding:16px">
+                <table class="cmp" aria-label="Your connection compared with ExitLag">
+                  <thead><tr><th scope="col">Measured</th><th scope="col">Your connection</th><th scope="col">With ExitLag</th><th scope="col"></th></tr></thead>
+                  <tbody id="cmpBody"></tbody>
+                </table>
+              </div>
+              <div class="widget">
+                <div class="w-head"><div class="w-title"><svg class="i"><use href="#i-alert"/></svg><h4>Problems on your route</h4></div><span class="small t-var" id="netFindCount"></span></div>
+                <div class="find-list" id="netFind"></div>
+              </div>
+              <div style="display:flex;gap:16px">
+                <button class="btn filled" type="button" data-go="report">See full report</button>
+                <button class="btn outlined" type="button" id="netAgain">Test another game</button>
+              </div>
+            </div>
+          </div>
+        </section>
+        <div class="net-head" id="netHead">
+          <span class="badge neutral" id="netLiveBadge" hidden><span class="live-dot"></span>Live</span>
+          <span class="route-lbl tnum" id="routeLbl"></span>
+        </div>
+        <div class="net-legend small" id="netLegend">
+          <span class="legend"><span class="sw" style="background:var(--isp)"></span>Your connection</span>
+          <span class="legend"><span class="sw" style="background:var(--success)"></span>ExitLag routes</span>
+          <span class="legend"><span class="sw" style="background:var(--primary)"></span>Packet loss</span>
+        </div>
+
+        <!-- ================= RELATÓRIO ================= -->
+        <section class="view" id="view-report" hidden aria-labelledby="rpTitle">
+          <div class="page-header"><h2 id="rpTitle">Your report</h2><span class="rule"></span><span class="small t-var" id="rpWhen"></span></div>
+          <div id="rpEmpty" class="widget empty" hidden>
+            <svg class="i"><use href="#i-report"/></svg>
+            <b class="h3">Your report builds itself from the analyses</b>
+            <p class="body t-var">Run at least one analysis to see what's holding your games back.</p>
+            <button class="btn filled" type="button" id="rpStart">Start check-up</button>
+          </div>
+          <div id="rpBody" class="vcol" style="display:flex;flex-direction:column;gap:24px">
+            <div class="rp-top" id="rpTop"></div>
+            <div class="rp">
+              <div class="widget">
+                <div class="w-head"><div class="w-title"><svg class="i"><use href="#i-alert"/></svg><h4>What's holding you back</h4></div><span class="small t-var">Most impact first</span></div>
+                <div class="find-list" id="rpFind"></div>
+              </div>
+              <div class="rp-side">
+                <div class="widget cta-panel">
+                  <div class="w-head"><div class="w-title"><h4>Fix it with ExitLag</h4></div></div>
+                  <div class="fix-list" id="rpFix"></div>
+                  <button class="btn filled lg block" type="button" data-paywall="trial" id="rpTrial">Start 3-day free trial</button>
+                  <button class="btn outlined block" type="button" data-paywall="plans">See plans</button>
+                </div>
+                <div class="widget" id="rpUp" hidden>
+                  <div class="w-head"><div class="w-title"><svg class="i"><use href="#i-cart"/></svg><h4>Upgrade worth making</h4></div><span class="badge neutral">Partner offer</span></div>
+                  <div class="find-list" id="rpUpList"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="md-overlay" id="mdOverlay" hidden></div>
+    <div class="modal" id="paywall" role="dialog" aria-modal="true" aria-labelledby="pwTitle" hidden>
+      <div id="pwPick">
+        <div class="md-body">
+          <div class="md-head">
+            <div class="txt"><span class="eyebrow" id="pwEyebrow">ExitLag</span><h3 class="h2" id="pwTitle">Play without lag</h3><p class="body t-var" id="pwDesc">Try every tool free for 3 days, then pick a plan.</p></div>
+            <button class="icon-btn" type="button" aria-label="Close" data-close><svg class="i"><use href="#i-close"/></svg></button>
+          </div>
+          <div class="unlocks" id="pwUnlocks"></div>
+          <div class="plans" id="plans"></div>
+        </div>
+        <div class="md-foot">
+          <span class="note small t-var">Prototype: example prices. You'll create an account in the next step.</span>
+          <button class="btn outlined" type="button" id="pwBuy">Subscribe</button>
+          <button class="btn filled" type="button" id="pwTrial">Start 3-day free trial</button>
+        </div>
+      </div>
+      <div id="pwDone" class="md-body md-done" hidden>
+        <span class="ok"><svg class="i"><use href="#i-check"/></svg></span>
+        <h3 class="h2" id="pwDoneTitle">Your free trial is on</h3>
+        <p class="body t-var" id="pwDoneDesc">Route Optimizer, FPS Boost, RAM Cleaner, DNS Optimizer and Multi Internet are unlocked for 3 days.</p>
+        <button class="btn filled" type="button" id="pwGo">Fix my problems now</button>
+      </div>
+    </div>
+
+    <div class="snackbar" id="snack" hidden role="status">
+      <div class="sb-content"><svg class="i"><use href="#i-check-circle"/></svg><div class="sb-body"><span class="sb-title" id="snackT"></span><span class="small t-var" id="snackD"></span></div></div>
+      <div class="sb-progress"><i id="snackBar"></i></div>
+    </div>
+    <div class="tip" id="tip" role="tooltip"></div>
+  </div>
+</div>
+
+<script src="land.js"></script>
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+} }</script>
+<script type="module" src="app.js"></script>
