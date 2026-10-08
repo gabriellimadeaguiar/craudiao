@@ -58,6 +58,27 @@ Item {
             id: pc; x: 16; y: 16; width: parent.width - 32; spacing: 12
             Txt { role: "eyebrow"; text: "Prototype controls" }
 
+            // desempenho medido agora (uma vez por segundo)
+            Grid {
+                columns: 2; columnSpacing: 12; rowSpacing: 2; width: parent.width
+                Repeater {
+                    model: [
+                        ["Frames", Perf.fps.toFixed(0) + " fps" + (Perf.fps > 0 ? " · " + Perf.frameMs.toFixed(1) + " ms" : " · idle")],
+                        ["Worst frame", Perf.worstMs.toFixed(1) + " ms"],
+                        ["CPU", Perf.cpu.toFixed(1) + "% of a core"],
+                        ["Memory", Perf.ramMb.toFixed(0) + " MB"],
+                        ["Startup", Perf.startupMs.toFixed(0) + " ms to first frame"]
+                    ]
+                    delegate: Item {
+                        required property var modelData
+                        width: parent.width; height: 18
+                        Txt { role: "small"; text: modelData[0] }
+                        Txt { anchors.right: parent.right; role: "small"; color: Theme.textMain; font.family: Theme.fontMono; text: modelData[1] }
+                    }
+                }
+            }
+            Rectangle { width: parent.width; height: 1; color: Theme.divider }
+
             // velocidade das esperas
             Row {
                 spacing: 4

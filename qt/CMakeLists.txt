@@ -21,6 +21,7 @@ qt_add_executable(ExitLagAnalyzer WIN32 MACOSX_BUNDLE
     src/traceroute.cpp src/traceroute.h
     src/gamescanner.cpp src/gamescanner.h
     src/platform.cpp src/platform.h
+    src/perfmonitor.cpp src/perfmonitor.h
 )
 
 if(WIN32)

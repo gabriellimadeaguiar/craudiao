@@ -21,4 +21,5 @@ public:
     QString startScene() const;   // --scene=<nome> na linha de comando, para testar uma tela direto
     Q_INVOKABLE void openUrl(const QString &url) const;
     Q_INVOKABLE void log(const QString &message) const;
+    Q_INVOKABLE bool flag(const QString &name) const { return qEnvironmentVariableIsSet(qPrintable(QStringLiteral("EXL_") + name)); }
 };

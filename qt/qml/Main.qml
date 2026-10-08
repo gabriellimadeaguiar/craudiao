@@ -36,7 +36,7 @@ Window {
         property string email: ""
         property var mapResults: []
         readonly property var win: win
-        function go(s) { scene = s; }
+        function go(s) { scene = s; Perf.tag = s; }
         function toast(t, d) { toaster.show(t, d); }
         function notify(t, d) {
             var n = notifications.slice();
@@ -90,7 +90,7 @@ Window {
         id: frame
         anchors.fill: parent
         readonly property real radius: win.visibility === Window.Maximized || win.visibility === Window.FullScreen ? 0 : Theme.windowRadius
-        layer.enabled: radius > 0
+        layer.enabled: radius > 0 && !Platform.flag("NOROUND")
         layer.effect: ShaderEffect {
             property vector2d size: Qt.vector2d(frame.width, frame.height)
             property real radius: frame.radius
@@ -150,6 +150,8 @@ Window {
     Component.onCompleted: {
         scanner.scan();
         app.locate();
+        Perf.attach(win);
+        Perf.tag = app.scene;
         // --scene=home/pc abre a home já com a gaveta do PC (atalho de teste: pc, profile, help, notifications, menu, off)
         if (Platform.startScene !== "") { var sc = Platform.startScene.split("/"); home.devOpen = sc[1] || ""; app.scene = sc[0]; }
         Platform.log("ExitLag Analyzer · Qt " + Platform.qtVersion + " · origin " + app.origin[2]);

@@ -160,6 +160,7 @@ Item {
     // luz difusa ao fundo: um halo largo e suave atrás do planeta (some no laranja quando a ExitLag desliga)
     Item {
         id: backGlow
+        visible: !Platform.flag("NOGLOW")
         readonly property real r: globe.screenRadius * 2.6
         x: globe.screenCenter.x - r; y: globe.screenCenter.y - r; width: r * 2; height: r * 2
         Shape {
@@ -185,7 +186,7 @@ Item {
         renderMode: View3D.Offscreen
         environment: SceneEnvironment {
             backgroundMode: SceneEnvironment.Transparent
-            antialiasingMode: SceneEnvironment.MSAA
+            antialiasingMode: Platform.flag("NOAA") ? SceneEnvironment.NoAA : SceneEnvironment.MSAA
             antialiasingQuality: SceneEnvironment.High
         }
         camera: cam
@@ -193,6 +194,7 @@ Item {
 
         // céu
         Model {
+            visible: !Platform.flag("NOSTARS")
             geometry: StarGeometry { }
             materials: DefaultMaterial { lighting: DefaultMaterial.NoLighting; diffuseColor: Theme.globeStars; opacity: 0.5 }
         }
@@ -216,12 +218,13 @@ Item {
                     }
                 }
                 Model {
+                    visible: !Platform.flag("NOLAND")
                     geometry: LandGeometry { id: land; radius: globe.radius; dotSize: globe.dist < 4.6 ? 0.22 : 0.34 }
                     materials: DefaultMaterial { lighting: DefaultMaterial.NoLighting; diffuseColor: globe.landColor; opacity: 0.85 }
                 }
                 // rede ExitLag ao fundo: pontos verdes discretos piscando
                 Repeater3D {
-                    model: land.randomLandPoints(140, 7)
+                    model: Platform.flag("NONODES") ? 0 : land.randomLandPoints(140, 7)
                     delegate: Model {
                         required property var modelData
                         required property int index
@@ -276,6 +279,7 @@ Item {
 
         // atmosfera: fica parada (não gira com o globo), desenhada pelas faces de trás
         Model {
+            visible: !Platform.flag("NOATMO")
             source: "#Sphere"
             scale: Qt.vector3d(globe.radius / 50 * 1.6, globe.radius / 50 * 1.6, globe.radius / 50 * 1.6)
             materials: CustomMaterial {

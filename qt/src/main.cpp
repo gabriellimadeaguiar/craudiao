@@ -8,8 +8,11 @@
 #include <QImage>
 #include <QTimer>
 
+#include "perfmonitor.h"
+
 int main(int argc, char *argv[])
 {
+    PerfMonitor::markProcessStart();
     // profundidade, stencil e MSAA para o Qt Quick (no Windows o Qt usa Direct3D 11 por padrão)
     QSurfaceFormat fmt = QSurfaceFormat::defaultFormat();
     fmt.setDepthBufferSize(24); fmt.setStencilBufferSize(8); fmt.setSamples(4);
