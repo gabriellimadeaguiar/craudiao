@@ -68,7 +68,6 @@ svg.i.xs { width: 16px; height: 16px; }
 .vgroup { display: flex; align-items: center; gap: var(--sp-xs); padding: var(--sp-xs); border-radius: 100px; background: var(--container); border: 1px solid var(--divider); }
 .vlabel { padding: 0 var(--sp-sm) 0 var(--sp-md); font-size: 12px; line-height: 16px; color: var(--on-surface-variant); letter-spacing: .3px; }
 .vchip { height: 32px; padding: 0 var(--sp-lg); border-radius: 100px; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .3px; color: var(--on-surface-variant); transition: background-color .15s ease, color .15s ease; }
-a.vchip { display: inline-flex; align-items: center; text-decoration: none; }
 .vchip:hover { background: var(--container-high); color: var(--on-surface); }
 .vchip[aria-pressed="true"] { background: var(--input); color: var(--on-surface); box-shadow: inset 0 0 0 1px var(--stroke); }
 .vchip:focus-visible { outline: 2px solid var(--series1); outline-offset: 2px; }
@@ -391,6 +390,9 @@ a.vchip { display: inline-flex; align-items: center; text-decoration: none; }
 .app { transition: opacity 600ms var(--ease-accelerate), filter 600ms var(--ease-accelerate); }
 .app.leaving { opacity: 0; filter: blur(6px); }
 
+.home-frame { position: fixed; inset: 0; z-index: 1000; width: 100%; height: 100%; border: 0; background: #050608; opacity: 0; transition: opacity 600ms var(--ease-decelerate); }
+.home-frame.in { opacity: 1; }
+
 /* snackbar */
 .snackbar { position: absolute; left: 50%; bottom: var(--sp-xl); z-index: 600; width: 380px; translate: -50% 0; border-radius: 10px; overflow: hidden; background: var(--input); box-shadow: var(--shadow-panel);
   transform: translateY(calc(100% + 24px)); transition: transform var(--dur-200) var(--ease-accelerate); }
@@ -452,7 +454,7 @@ a.vchip { display: inline-flex; align-items: center; text-decoration: none; }
       <button class="vchip" type="button" data-jump="intro" aria-pressed="false">Check-up</button><span class="vsep" aria-hidden="true"></span>
       <button class="vchip" type="button" data-jump="scan" aria-pressed="false">Analysis</button><span class="vsep" aria-hidden="true"></span>
       <button class="vchip" type="button" data-jump="results" aria-pressed="false">Results &amp; plans</button><span class="vsep" aria-hidden="true"></span>
-      <a class="vchip" href="home.html#map">After log in</a>
+      <button class="vchip" type="button" id="toHome">After log in</button>
     </nav>
     <div class="vgroup" role="group" aria-label="Prototype: simulated PC">
       <span class="vlabel">Simulated PC</span>

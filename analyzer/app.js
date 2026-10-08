@@ -511,32 +511,43 @@ function finishLogin(how) {
   $('lgDoneTxt').textContent = `${how}${p ? ` ${p.n} plan active.` : ' Your 3-day free trial is on.'} Opening ExitLag: first we map your network, then find your games.`;
   openHome();
 }
-$('lgForm').addEventListener('submit', e => {
-  e.preventDefault();
-  const em = $('lgEmail'), pw = $('lgPass');
-  const bad = [[em, !/^\S+@\S+\.\S+$/.test(em.value), 'Enter a valid email address.'], [pw, pw.value.length < 8, 'Use at least 8 characters for your password.']];
-  bad.forEach(([el, b]) => el.parentElement.classList.toggle('bad', b));
-  const first = bad.find(x => x[1]);
-  if (first) { $('lgErr').textContent = first[2]; first[0].focus(); return; }
-  finishLogin(S.loginMode === 'login' ? 'Logged in.' : 'Account created.');
-});
+$('lgForm').addEventListener('submit', e => { e.preventDefault(); $('lgErr').textContent = ''; finishLogin(S.loginMode === 'login' ? 'Logged in.' : 'Account created.'); });
 $('lgGoogle').addEventListener('click', () => finishLogin('Signed in with Google.'));
 
 /* ---------- Entrada: login de quem já assina, ou o check-up para quem é novo ---------- */
 $('enCheck').addEventListener('click', () => scene('intro'));
 $('introLogin').addEventListener('click', () => scene('entry'));
 // depois do login, o app segue para o fluxo pós-login do protótipo da home: network map › varredura de jogos › onboarding › home
-function openHome() { setTimeout(() => { app.classList.add('leaving'); setTimeout(() => { location.href = 'home.html#map'; }, reduce ? 0 : 600); }, reduce ? 0 : 1600); }
+// O protótipo da home abre dentro desta página, num iframe de tela inteira: trocar de página não funciona em todo visualizador.
+// O HTML é lido por fetch e ganha <base> apontando para os arquivos publicados, e a etapa inicial (network map) vai por variável.
+let homeFrame = null;
+async function launchHome(delay = 0) {
+  if (homeFrame) return;
+  await wait(delay);
+  app.classList.add('leaving');
+  try {
+    const html = await (await fetch('home.html')).text();
+    const base = new URL('.', location.href).href;
+    const doc = html.replace(/<head>/i, `<head><base href="${base}"><script>window.XL_START = 'map'; const r = history.replaceState.bind(history); history.replaceState = (...x) => { try { return r(...x); } catch { } };<\/script>`);
+    homeFrame = document.createElement('iframe');
+    homeFrame.className = 'home-frame'; homeFrame.title = 'ExitLag home'; homeFrame.setAttribute('allow', 'autoplay');
+    homeFrame.srcdoc = doc;
+    document.body.appendChild(homeFrame);
+    homeFrame.addEventListener('load', () => homeFrame.classList.add('in'), { once: true });
+  } catch (e) { console.warn('Home prototype unavailable', e); location.href = 'home.html#map'; }
+}
+function closeHome() {
+  if (!homeFrame) return;
+  homeFrame.remove(); homeFrame = null; app.classList.remove('leaving');
+  $('enForm').hidden = false; document.querySelector('.en-head').hidden = false; $('enDone').hidden = true; $('enPass').value = '';
+  scene('entry');
+}
+addEventListener('message', e => { if (e.data === 'xl:back') closeHome(); });
+$('toHome').addEventListener('click', () => { S.runId++; S.running = false; launchHome(0); });
+function openHome() { launchHome(reduce ? 0 : 1400); }
 function enDone() { $('enForm').hidden = true; document.querySelector('.en-head').hidden = true; const d = $('enDone'); d.hidden = false; d.classList.remove('in'); void d.offsetWidth; d.classList.add('in'); openHome(); }
-$('enForm').addEventListener('submit', e => {
-  e.preventDefault();
-  const em = $('enEmail'), pw = $('enPass');
-  const bad = [[em, !/^\S+@\S+\.\S+$/.test(em.value), 'Enter the email you use for ExitLag.'], [pw, !pw.value, 'Enter your password.']];
-  bad.forEach(([el, b]) => el.parentElement.classList.toggle('bad', b));
-  const first = bad.find(x => x[1]);
-  if (first) { $('enErr').textContent = first[2]; first[0].focus(); return; }
-  $('enErr').textContent = ''; enDone();
-});
+// protótipo: qualquer email e senha entram, para ninguém ficar preso antes do fluxo pós-login
+$('enForm').addEventListener('submit', e => { e.preventDefault(); $('enErr').textContent = ''; enDone(); });
 $('enGoogle').addEventListener('click', enDone);
 $('enForgot').addEventListener('click', () => toast('Reset your password', 'We send a reset link to your email. Not active in the prototype.'));
 

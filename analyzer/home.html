@@ -1363,7 +1363,7 @@ p { margin: 0; }
 
 <div class="stage">
   <nav class="vchips" aria-label="After log in: network map, library scan, onboarding, home">
-    <a class="vback" href="index.html" aria-label="Back to the log in and free check-up">Log in &amp; check-up</a><span class="vsep" aria-hidden="true"></span>
+    <a class="vback" href="index.html" onclick="if (window.parent !== window) { parent.postMessage('xl:back', '*'); return false; }" aria-label="Back to the log in and free check-up">Log in &amp; check-up</a><span class="vsep" aria-hidden="true"></span>
     <button class="vchip" type="button" data-step="map" aria-pressed="false">Network map</button><span class="vsep" aria-hidden="true"></span>
     <button class="vchip" type="button" data-step="scan" aria-pressed="false">Library scan</button><span class="vsep" aria-hidden="true"></span>
     <button class="vchip" type="button" data-step="tour" aria-pressed="false">Onboarding</button><span class="vsep" aria-hidden="true"></span>

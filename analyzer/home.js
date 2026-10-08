@@ -1846,5 +1846,5 @@ vchips.forEach(c => c.addEventListener('click', () => {
 if (/^#v\d+$/.test(location.hash)) setV(location.hash.slice(2));
 if (location.hash === '#login') startBoot();
 if (location.hash === '#scan') startScan();
-if (/^#(map|passive)$/.test(location.hash)) startPmap();
+if (/^#(map|passive)$/.test(location.hash) || window.XL_START === 'map') startPmap(); // XL_START: aberto pelo analisador depois do login
 if (location.hash === '#tour') setTimeout(startTour, 600);
