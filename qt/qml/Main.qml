@@ -41,7 +41,8 @@ Window {
         property string email: ""
         property var mapResults: []
         readonly property var win: win
-        function go(s) { scene = s; Perf.tag = s; }
+        function go(s) { scene = s; }
+        onSceneChanged: Perf.tag = scene
         function toast(t, d) { toaster.show(t, d); }
         function notify(t, d) {
             var n = notifications.slice();
@@ -150,9 +151,9 @@ Window {
         Platform.roundCorners(win);
         app.locate();
         Perf.attach(win);
-        Perf.tag = app.scene;
         // --scene=home/pc abre a home já com a gaveta do PC (atalho de teste: pc, profile, help, notifications, menu, off)
         if (Platform.startScene !== "") { var sc = Platform.startScene.split("/"); home.devOpen = sc[1] || ""; app.scene = sc[0]; }
+        Perf.tag = app.scene;
         Platform.log("ExitLag Analyzer · Qt " + Platform.qtVersion + " · origin " + app.origin[2]);
     }
 }
