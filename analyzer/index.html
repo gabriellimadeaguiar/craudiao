@@ -97,8 +97,6 @@ svg.i.xs { width: 16px; height: 16px; }
 .nav-st .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--divider); border-top-color: var(--primary); animation: spin 1s linear infinite; }
 .tools .nav-item .lv { color: var(--on-surface-variant); }
 .tools .nav-item .nm { color: var(--on-surface-variant); }
-.app.trial .tools .nav-item .lv, .app.trial .tools .nav-item .nm { color: var(--on-surface); }
-.app.trial .tools .lock { display: none; }
 .sb-foot { margin-top: auto; padding: 0 var(--sp-lg); display: flex; flex-direction: column; gap: var(--sp-md); }
 .privacy { display: flex; gap: var(--sp-sm); align-items: flex-start; font-size: 12px; line-height: 16px; letter-spacing: .4px; color: var(--on-surface-variant); }
 .privacy svg { color: var(--on-surface-variant); }
@@ -122,9 +120,6 @@ svg.i.xs { width: 16px; height: 16px; }
 .vdiv { width: 1px; height: 16px; background: var(--divider); }
 .link { cursor: pointer; text-decoration: underline; line-height: 20px; letter-spacing: .25px; height: 24px; display: inline-flex; align-items: center; transition: color .15s ease; }
 .link:hover, .link:active { color: var(--on-surface-variant); }
-.app:not(.trial) .trial-chip { display: none; }
-.app.trial .trial-chip { display: inline-flex; }
-.app.trial .tb-cta { display: none; }
 
 .btn {
   height: 40px; padding: 0 var(--sp-lg); border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-sm);
@@ -153,7 +148,7 @@ svg.i.xs { width: 16px; height: 16px; }
 .globe-host { position: absolute; top: 0; bottom: 0; right: 0; left: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity var(--dur-500) var(--ease-standard), left var(--dur-900) var(--ease-standard); }
 .app.no-globe .globe-host { background: radial-gradient(40% 50% at 60% 50%, #191d24, transparent 70%); }
 .globe-host canvas { width: 100%; height: 100%; display: block; -webkit-mask: linear-gradient(90deg, transparent, #000 96px); mask: linear-gradient(90deg, transparent, #000 96px); }
-.app[data-view="welcome"] .globe-host { opacity: 1; left: 520px; }
+.app[data-view="login"] .globe-host { opacity: .55; left: 0; }
 .app[data-view="network"] .globe-host { opacity: 1; left: 420px; }
 .globe-tags { position: absolute; inset: 0; pointer-events: none; }
 .gtag { position: absolute; left: 0; top: 0; translate: -50% calc(-100% - 12px); display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px;
@@ -198,7 +193,6 @@ svg.i.xs { width: 16px; height: 16px; }
 .tool-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 8px; border-radius: 4px; background: var(--container-high); border: 1px solid var(--divider); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .4px; white-space: nowrap; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
 .tool-chip:hover { background: var(--input); border-color: var(--stroke); }
 .tool-chip .lock { color: var(--on-surface-variant); }
-.app.trial .tool-chip .lock { display: none; }
 .tool-chip.applied { color: var(--success); border-color: #22eba340; }
 .tool-chip.applied .lock { display: none; }
 .tool-chip.free { cursor: default; color: var(--on-surface-variant); }
@@ -212,23 +206,11 @@ svg.i.xs { width: 16px; height: 16px; }
 @keyframes skSweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
 
 /* ---------- Boas-vindas ---------- */
-#view-welcome { justify-content: center; padding-left: var(--sp-2xl); }
-.wl { width: 480px; display: flex; flex-direction: column; gap: var(--sp-xl); }
-.wl .lead { display: flex; flex-direction: column; gap: var(--sp-md); }
-.wl-cards { display: flex; flex-direction: column; gap: var(--sp-lg); }
-.an-card { display: flex; gap: var(--sp-lg); align-items: flex-start; padding: var(--sp-lg) var(--sp-xl) var(--sp-lg) var(--sp-lg); border-radius: 8px; background: var(--container); box-shadow: var(--shadow-widget); cursor: pointer; transition: background-color .15s ease, box-shadow .15s ease; text-align: left; width: 100%; }
-.an-card:hover { background: var(--container-high); box-shadow: var(--shadow-widget), inset 0 0 0 1px var(--divider); }
-.an-card:focus-visible { outline: 2px solid var(--series1); outline-offset: 2px; }
-.an-ic { width: 48px; height: 48px; border-radius: 8px; background: var(--input); display: grid; place-items: center; flex: none; }
-.an-card .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-xs); }
-.an-card .row { display: flex; align-items: center; gap: var(--sp-sm); }
-.an-card .row h3 { flex: 1; }
-.wl-actions { display: flex; align-items: center; gap: var(--sp-lg); }
-.wl-foot { display: flex; gap: var(--sp-xl); }
-.wl-foot span { display: inline-flex; align-items: center; gap: 6px; }
-.origin-tag { position: absolute; z-index: 2; right: var(--sp-xl); bottom: var(--sp-xl); display: flex; align-items: center; gap: var(--sp-sm); padding: var(--sp-sm) var(--sp-md); border-radius: 8px; background: #111317cc; box-shadow: var(--shadow-widget); }
 
 /* ---------- Hardware ---------- */
+.intro { display: flex; flex-direction: column; gap: var(--sp-sm); max-width: 720px; margin-top: calc(-1 * var(--sp-sm)); }
+.lead { display: flex; flex-direction: column; gap: var(--sp-md); }
+
 .hw { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: var(--sp-xl); align-items: start; }
 .parts { padding: var(--sp-sm) 0; gap: 0; }
 .parts .w-head { padding: 0 var(--sp-xl) var(--sp-sm); }
@@ -365,6 +347,50 @@ svg.i.xs { width: 16px; height: 16px; }
 .fix-row .txt b { font-weight: 500; line-height: 20px; letter-spacing: .25px; }
 .empty { display: flex; flex-direction: column; align-items: center; gap: var(--sp-md); text-align: center; padding: var(--sp-2xl); }
 
+/* ---------- Plano (CTA) ---------- */
+.pl { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: var(--sp-2xl); align-items: start; }
+.pl-main { display: flex; flex-direction: column; gap: var(--sp-xl); }
+.pl-fixes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-lg); }
+.pl-fix { display: flex; gap: var(--sp-md); padding: var(--sp-lg); border-radius: 8px; background: var(--container); box-shadow: var(--shadow-widget); }
+.pl-fix .ic { width: 40px; height: 40px; border-radius: 8px; background: var(--input); display: grid; place-items: center; flex: none; }
+.pl-fix .txt { display: flex; flex-direction: column; gap: var(--sp-xs); min-width: 0; }
+.pl-fix .txt b { font-weight: 500; line-height: 20px; letter-spacing: .25px; display: flex; align-items: center; gap: var(--sp-sm); }
+.pl-fix.dim { opacity: .55; }
+.pl-fix:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.pl-side { display: flex; flex-direction: column; gap: var(--sp-lg); padding: var(--sp-xl); border-radius: 16px; background: var(--container); box-shadow: var(--shadow-panel); position: sticky; top: calc(var(--topbar-inset) + var(--sp-xl)); }
+.pl-side .plans { grid-template-columns: 1fr; gap: var(--sp-sm); }
+.offer { display: flex; flex-direction: column; gap: var(--sp-xs); padding: var(--sp-lg); border-radius: 8px; background: var(--container-high); text-align: left; box-shadow: inset 0 0 0 1px var(--divider); transition: box-shadow .15s ease, background-color .15s ease; }
+.offer:hover { background: var(--input); }
+.offer[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--on-surface); }
+.offer:focus-visible { outline: 2px solid var(--series1); outline-offset: 2px; }
+.off-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-sm); }
+.pl-side .plan { flex-direction: row; align-items: center; justify-content: space-between; padding: var(--sp-md) var(--sp-lg); }
+.pl-side .plan .nm { display: flex; flex-direction: column; gap: 2px; }
+.pl-side .plan .pr b { font-size: 22px; line-height: 28px; }
+.pl-side .plan .badge { position: static; }
+
+/* ---------- Login: fim do fluxo, sobre o globo ---------- */
+#view-login { align-items: center; justify-content: center; }
+.lg-card { width: 420px; padding: var(--sp-2xl); gap: var(--sp-xl); border-radius: 16px; box-shadow: var(--shadow-panel); background: #111317f2; }
+.lg-card .logo { width: 87.5px; height: 20px; }
+.lg-head { display: flex; flex-direction: column; gap: var(--sp-sm); align-items: flex-start; }
+.lg-form { display: flex; flex-direction: column; gap: var(--sp-lg); }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.input { height: 40px; background: var(--input); border-radius: 4px; padding: 0 var(--sp-md); display: flex; align-items: center; gap: var(--sp-sm); color: var(--on-surface-variant); transition: background-color var(--dur-100) var(--ease-standard), box-shadow var(--dur-100) var(--ease-standard); }
+.input:hover, .input:focus-within { background: var(--input-hover); }
+.input.bad { box-shadow: inset 0 0 0 1px var(--primary); }
+.input input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--on-surface); font: inherit; letter-spacing: .25px; }
+.input input::placeholder { color: var(--on-surface-variant); }
+.lg-err { color: var(--critical-text); min-height: 0; }
+.lg-err:empty { display: none; }
+.or { display: flex; align-items: center; gap: var(--sp-md); }
+.or span { flex: 1; height: 1px; background: var(--divider); }
+.lg-switch { text-align: center; }
+.lg-switch .link { height: auto; font-size: 12px; }
+.lg-done { display: flex; flex-direction: column; align-items: center; gap: var(--sp-lg); text-align: center; }
+.lg-done .ok { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--success-container); color: var(--success); }
+.lg-done.in { animation: viewIn var(--dur-300) var(--ease-decelerate); }
+
 /* ---------- Modal (comp / modal: dialog com escala + opacidade) ---------- */
 .md-overlay { position: absolute; inset: 0; z-index: 300; background: #0b0c0fd9; opacity: 0; transition: opacity var(--dur-200) var(--ease-accelerate); }
 .md-overlay.show { opacity: 1; transition: opacity var(--dur-300) var(--ease-decelerate); }
@@ -443,6 +469,8 @@ svg.i.xs { width: 16px; height: 16px; }
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.5a2.4 2.4 0 1 1 3.3 2.2c-.7.3-1 .8-1 1.5v.3M12 16.5h.01"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.8-6.5-11a6.5 6.5 0 0 1 13 0c0 5.2-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c1-3.6 4-5.5 7.5-5.5s6.5 1.9 7.5 5.5"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></symbol>
     <symbol id="i-redo" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15"/></symbol>
   </defs>
 </svg>
@@ -451,10 +479,11 @@ svg.i.xs { width: 16px; height: 16px; }
   <div class="vchips">
     <nav class="vgroup" aria-label="Prototype: jump to a step">
       <span class="vlabel">Flow</span>
-      <button class="vchip" type="button" data-jump="welcome" aria-pressed="true">Welcome</button><span class="vsep" aria-hidden="true"></span>
-      <button class="vchip" type="button" data-jump="hardware" aria-pressed="false">Hardware</button><span class="vsep" aria-hidden="true"></span>
+      <button class="vchip" type="button" data-jump="hardware" aria-pressed="true">Hardware</button><span class="vsep" aria-hidden="true"></span>
       <button class="vchip" type="button" data-jump="network" aria-pressed="false">Network</button><span class="vsep" aria-hidden="true"></span>
-      <button class="vchip" type="button" data-jump="report" aria-pressed="false">Report</button>
+      <button class="vchip" type="button" data-jump="results" aria-pressed="false">Results</button><span class="vsep" aria-hidden="true"></span>
+      <button class="vchip" type="button" data-jump="plan" aria-pressed="false">Plan</button><span class="vsep" aria-hidden="true"></span>
+      <button class="vchip" type="button" data-jump="login" aria-pressed="false">Log in</button>
     </nav>
     <div class="vgroup" role="group" aria-label="Prototype: simulated PC">
       <span class="vlabel">Simulated PC</span>
@@ -464,14 +493,17 @@ svg.i.xs { width: 16px; height: 16px; }
     </div>
   </div>
 
-  <div class="app" id="app" data-view="welcome">
+  <div class="app" id="app" data-view="hardware">
     <aside class="sidebar">
       <img class="logo" src="logo.svg" alt="ExitLag">
       <nav class="nav" aria-label="Analysis">
-        <div class="nav-item sel" tabindex="0" role="link" data-go="welcome" aria-current="page"><span class="lv"><svg class="i"><use href="#i-overview"/></svg></span><span class="nm">Overview</span><span class="nav-st"></span></div>
-        <div class="nav-item" tabindex="0" role="link" data-go="hardware"><span class="lv"><svg class="i"><use href="#i-pc"/></svg></span><span class="nm">Hardware analysis</span><span class="nav-st" data-st="hardware"></span></div>
-        <div class="nav-item" tabindex="0" role="link" data-go="network"><span class="lv"><svg class="i"><use href="#i-net"/></svg></span><span class="nm">Network analysis</span><span class="nav-st" data-st="network"></span></div>
-        <div class="nav-item" tabindex="0" role="link" data-go="report"><span class="lv"><svg class="i"><use href="#i-report"/></svg></span><span class="nm">Your report</span><span class="nav-st" data-st="report"></span></div>
+        <div class="nav-label" style="padding-top:0">Free check-up</div>
+        <div class="nav-item step sel" tabindex="0" role="link" data-go="hardware" aria-current="page"><span class="lv"><svg class="i"><use href="#i-pc"/></svg></span><span class="nm">Hardware analysis</span><span class="nav-st" data-st="hardware"></span></div>
+        <div class="nav-item step" tabindex="0" role="link" data-go="network"><span class="lv"><svg class="i"><use href="#i-net"/></svg></span><span class="nm">Network analysis</span><span class="nav-st" data-st="network"></span></div>
+        <div class="nav-item step" tabindex="0" role="link" data-go="results"><span class="lv"><svg class="i"><use href="#i-report"/></svg></span><span class="nm">Results</span><span class="nav-st" data-st="results"></span></div>
+        <div class="nav-label">Get ExitLag</div>
+        <div class="nav-item step" tabindex="0" role="link" data-go="plan"><span class="lv"><svg class="i"><use href="#i-boost"/></svg></span><span class="nm">Choose a plan</span><span class="nav-st" data-st="plan"></span></div>
+        <div class="nav-item step" tabindex="0" role="link" data-go="login"><span class="lv"><svg class="i"><use href="#i-user"/></svg></span><span class="nm">Log in</span><span class="nav-st" data-st="login"></span></div>
         <div class="tools">
           <div class="nav-label">ExitLag tools</div>
           <div class="nav" style="padding:0">
@@ -491,11 +523,9 @@ svg.i.xs { width: 16px; height: 16px; }
 
     <div class="content">
       <header class="topbar">
-        <div class="tb-left"><h1 id="tbTitle">Overview</h1><span class="crumb" id="tbCrumb">Free check-up</span></div>
+        <div class="tb-left"><h1 id="tbTitle">Hardware analysis</h1><span class="crumb" id="tbCrumb">Step 1 of 3</span></div>
         <div class="tb-right">
-          <span class="badge success trial-chip"><span class="dot"></span>Free trial · 3 days left</span>
-          <button class="link" type="button" id="signIn">Sign in</button>
-          <button class="btn filled tb-cta" type="button" data-paywall="trial">Start free trial</button>
+          <span class="small t-var tb-have">Already have ExitLag?</span><button class="link" type="button" id="signIn">Log in</button>
           <span class="vdiv"></span>
           <div class="btn-group">
             <button class="icon-btn" type="button" aria-label="Help Center" data-tip="Help Center"><svg class="i"><use href="#i-help"/></svg></button>
@@ -508,42 +538,15 @@ svg.i.xs { width: 16px; height: 16px; }
       <main class="main" id="main">
         <div class="globe-host" id="globeHost"><canvas id="globe" role="img" aria-label="Globe with your location and the routes to the game server"></canvas><div class="globe-tags" id="gTags"></div></div>
 
-        <!-- ================= BOAS-VINDAS ================= -->
-        <section class="view" id="view-welcome" aria-labelledby="wlTitle">
-          <div class="wl">
-            <div class="lead">
-              <span class="eyebrow"><svg class="i xs"><use href="#i-clock"/></svg>Free check-up · about 1 minute · no account</span>
-              <h2 class="display" id="wlTitle">Find out what's slowing your games down.</h2>
-              <p class="body-lg">We look at your PC and at your connection to the game server, then show you what's causing lag and stutter and how to fix it.</p>
-            </div>
-            <div class="wl-cards">
-              <button class="an-card" type="button" data-go="hardware">
-                <span class="an-ic"><svg class="i"><use href="#i-pc"/></svg></span>
-                <span class="txt">
-                  <span class="row"><h3 class="h3">Hardware analysis</h3><span id="wlHwSt" class="badge neutral">About 15 s</span></span>
-                  <span class="body t-var">Reads your CPU, graphics card, memory, storage and display, and tells you what kind of gaming PC you have.</span>
-                </span>
-              </button>
-              <button class="an-card" type="button" data-go="network">
-                <span class="an-ic"><svg class="i"><use href="#i-net"/></svg></span>
-                <span class="txt">
-                  <span class="row"><h3 class="h3">Network analysis</h3><span id="wlNetSt" class="badge neutral">About 30 s</span></span>
-                  <span class="body t-var">Tests your connection to a game server, first as it is today and then through ExitLag, and compares the two.</span>
-                </span>
-              </button>
-            </div>
-            <div class="wl-actions">
-              <button class="btn filled lg" type="button" id="startAll">Start check-up</button>
-              <button class="link" type="button" data-go="report" id="wlReport" hidden>See your report</button>
-            </div>
-          </div>
-          <div class="origin-tag small"><svg class="i xs"><use href="#i-pin"/></svg><span class="t-var">Testing from</span><span class="t-em" id="originName"></span></div>
-        </section>
 
         <!-- ================= HARDWARE ================= -->
         <section class="view" id="view-hardware" hidden aria-labelledby="hwTitle">
           <div class="page-header"><h2 id="hwTitle">Hardware analysis</h2><span class="rule"></span>
-            <div class="hw-run" id="hwRun"><span class="small t-var tnum" id="hwStatus">Not run yet</span><button class="btn outlined" type="button" id="hwAgain" hidden><svg class="i"><use href="#i-redo"/></svg>Run again</button></div>
+            <div class="hw-run" id="hwRun"><span class="small t-var tnum" id="hwStatus">Not run yet</span><button class="btn outlined" type="button" id="hwAgain" hidden><svg class="i"><use href="#i-redo"/></svg>Run again</button><button class="btn filled" type="button" id="hwCont" data-go="network" hidden>Continue to network</button></div>
+          </div>
+          <div class="intro" id="hwIntro">
+            <span class="eyebrow"><svg class="i xs"><use href="#i-clock"/></svg>Free check-up · step 1 of 3 · no account needed</span>
+            <p class="body-lg">We read your CPU, graphics card, memory, storage and display, and tell you what kind of gaming PC you have and what's slowing it down.</p>
           </div>
           <div class="progress" id="hwProg" hidden><i></i></div>
           <div class="hw">
@@ -573,8 +576,8 @@ svg.i.xs { width: 16px; height: 16px; }
                 <p class="small t-var">Optimization can't make up for a part this old. We picked the best price we found today at our partner store.</p>
               </div>
               <div class="widget next-step" id="hwNext" hidden>
-                <div class="txt"><b class="h3">Next: your connection</b><span class="body t-var" id="hwNextTxt">Lag also comes from the route to the game server. Test it next.</span></div>
-                <button class="btn filled" type="button" data-go="network">Test network</button>
+                <div class="txt"><b class="h3">Step 2: your connection</b><span class="body t-var" id="hwNextTxt">Lag also comes from the route to the game server. Test it next.</span></div>
+                <button class="btn filled" type="button" data-go="network">Continue to network</button>
               </div>
             </div>
           </div>
@@ -639,7 +642,7 @@ svg.i.xs { width: 16px; height: 16px; }
                 <div class="find-list" id="netFind"></div>
               </div>
               <div style="display:flex;gap:16px">
-                <button class="btn filled" type="button" data-go="report">See full report</button>
+                <button class="btn filled" type="button" data-go="results">See your results</button>
                 <button class="btn outlined" type="button" id="netAgain">Test another game</button>
               </div>
             </div>
@@ -656,13 +659,13 @@ svg.i.xs { width: 16px; height: 16px; }
         </div>
 
         <!-- ================= RELATÓRIO ================= -->
-        <section class="view" id="view-report" hidden aria-labelledby="rpTitle">
-          <div class="page-header"><h2 id="rpTitle">Your report</h2><span class="rule"></span><span class="small t-var" id="rpWhen"></span></div>
+        <section class="view" id="view-results" hidden aria-labelledby="rpTitle">
+          <div class="page-header"><h2 id="rpTitle">Your results</h2><span class="rule"></span><span class="small t-var" id="rpWhen"></span></div>
           <div id="rpEmpty" class="widget empty" hidden>
             <svg class="i"><use href="#i-report"/></svg>
-            <b class="h3">Your report builds itself from the analyses</b>
+            <b class="h3">Your results build themselves from the analyses</b>
             <p class="body t-var">Run at least one analysis to see what's holding your games back.</p>
-            <button class="btn filled" type="button" id="rpStart">Start check-up</button>
+            <button class="btn filled" type="button" data-go="hardware">Start with your PC</button>
           </div>
           <div id="rpBody" class="vcol" style="display:flex;flex-direction:column;gap:24px">
             <div class="rp-top" id="rpTop"></div>
@@ -674,9 +677,9 @@ svg.i.xs { width: 16px; height: 16px; }
               <div class="rp-side">
                 <div class="widget cta-panel">
                   <div class="w-head"><div class="w-title"><h4>Fix it with ExitLag</h4></div></div>
+                  <button class="btn filled lg block" type="button" data-go="plan" id="rpTrial">Fix these problems</button>
+                  <p class="small t-var" style="text-align:center">Try every tool free for 3 days</p>
                   <div class="fix-list" id="rpFix"></div>
-                  <button class="btn filled lg block" type="button" data-paywall="trial" id="rpTrial">Start 3-day free trial</button>
-                  <button class="btn outlined block" type="button" data-paywall="plans">See plans</button>
                 </div>
                 <div class="widget" id="rpUp" hidden>
                   <div class="w-head"><div class="w-title"><svg class="i"><use href="#i-cart"/></svg><h4>Upgrade worth making</h4></div><span class="badge neutral">Partner offer</span></div>
@@ -686,32 +689,58 @@ svg.i.xs { width: 16px; height: 16px; }
             </div>
           </div>
         </section>
-      </main>
-    </div>
 
-    <div class="md-overlay" id="mdOverlay" hidden></div>
-    <div class="modal" id="paywall" role="dialog" aria-modal="true" aria-labelledby="pwTitle" hidden>
-      <div id="pwPick">
-        <div class="md-body">
-          <div class="md-head">
-            <div class="txt"><span class="eyebrow" id="pwEyebrow">ExitLag</span><h3 class="h2" id="pwTitle">Play without lag</h3><p class="body t-var" id="pwDesc">Try every tool free for 3 days, then pick a plan.</p></div>
-            <button class="icon-btn" type="button" aria-label="Close" data-close><svg class="i"><use href="#i-close"/></svg></button>
+        <!-- ================= PLANO (CTA) ================= -->
+        <section class="view" id="view-plan" hidden aria-labelledby="plTitle">
+          <div class="page-header"><h2 id="plTitle">Choose how to start</h2><span class="rule"></span><span class="small t-var">Step 4 of 5</span></div>
+          <div class="pl">
+            <div class="pl-main">
+              <div class="lead">
+                <span class="eyebrow" id="plEyebrow">Based on your results</span>
+                <h3 class="display" id="plHead">Fix what we found.</h3>
+                <p class="body-lg" id="plDesc">Every tool below is included in every plan.</p>
+              </div>
+              <div class="pl-fixes" id="plFixes"></div>
+            </div>
+            <div class="pl-side">
+              <button class="offer" type="button" id="offTrial" aria-pressed="true">
+                <span class="off-top"><b class="h3">3-day free trial</b><span class="badge success">Start here</span></span>
+                <span class="body t-var">Every tool, no charge for 3 days. Pick a plan when it ends.</span>
+              </button>
+              <div class="plans" id="plans"></div>
+              <button class="btn filled lg block" type="button" id="plGo">Start free trial</button>
+              <p class="small t-var" id="plNote">Prototype: example prices. You'll create your account in the next step.</p>
+            </div>
           </div>
-          <div class="unlocks" id="pwUnlocks"></div>
-          <div class="plans" id="plans"></div>
-        </div>
-        <div class="md-foot">
-          <span class="note small t-var">Prototype: example prices. You'll create an account in the next step.</span>
-          <button class="btn outlined" type="button" id="pwBuy">Subscribe</button>
-          <button class="btn filled" type="button" id="pwTrial">Start 3-day free trial</button>
-        </div>
-      </div>
-      <div id="pwDone" class="md-body md-done" hidden>
-        <span class="ok"><svg class="i"><use href="#i-check"/></svg></span>
-        <h3 class="h2" id="pwDoneTitle">Your free trial is on</h3>
-        <p class="body t-var" id="pwDoneDesc">Route Optimizer, FPS Boost, RAM Cleaner, DNS Optimizer and Multi Internet are unlocked for 3 days.</p>
-        <button class="btn filled" type="button" id="pwGo">Fix my problems now</button>
-      </div>
+        </section>
+
+        <!-- ================= LOGIN (fim do fluxo) ================= -->
+        <section class="view" id="view-login" hidden aria-labelledby="lgTitle">
+          <div class="lg-card widget" id="lgCard">
+            <img class="logo" src="logo.svg" alt="ExitLag">
+            <div class="lg-head">
+              <span class="badge success" id="lgPlan">3-day free trial</span>
+              <h2 class="h2" id="lgTitle">Create your account</h2>
+              <p class="body t-var" id="lgDesc">Your results come with you, so ExitLag can start fixing them right away.</p>
+            </div>
+            <form class="lg-form" id="lgForm" novalidate>
+              <label class="field"><span class="small t-var">Email</span><span class="input"><svg class="i sm"><use href="#i-mail"/></svg><input id="lgEmail" type="email" autocomplete="email" placeholder="you@example.com" required></span></label>
+              <label class="field"><span class="small t-var">Password</span><span class="input"><svg class="i sm"><use href="#i-lock"/></svg><input id="lgPass" type="password" autocomplete="new-password" placeholder="At least 8 characters" required minlength="8"></span></label>
+              <p class="small lg-err" id="lgErr" role="alert"></p>
+              <button class="btn filled lg block" type="submit" id="lgSubmit">Create account and start trial</button>
+              <div class="or small t-var"><span></span>or<span></span></div>
+              <button class="btn outlined block" type="button" id="lgGoogle">Continue with Google</button>
+              <p class="small t-var lg-switch"><span id="lgSwitchTxt">Already have an account?</span> <button class="link" type="button" id="lgSwitch">Log in</button></p>
+            </form>
+            <div class="lg-done" id="lgDone" hidden>
+              <span class="ok"><svg class="i"><use href="#i-check"/></svg></span>
+              <h2 class="h2">You're in</h2>
+              <p class="body t-var" id="lgDoneTxt">End of the prototype flow. In the app, ExitLag opens here and applies the fixes from your results.</p>
+              <button class="btn outlined" type="button" id="lgRestart">Start the flow again</button>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
 
     <div class="snackbar" id="snack" hidden role="status">

@@ -53,7 +53,6 @@ function findOrigin() {
 const origin = findOrigin();
 const vO = toV(origin[0], origin[1]);
 const km = (a, b) => toV(a[0], a[1]).angleTo(toV(b[0], b[1])) * 6371;
-$('originName').textContent = origin[2];
 
 /* ---------- Jogos detectados e servidores (simulado) ---------- */
 const REGIONS = {
@@ -164,69 +163,78 @@ const PROFILES = {
 };
 
 /* ---------- Estado ---------- */
-const S = { view: 'welcome', profile: 'mid', hw: null, net: null, trial: false, applied: new Set(), running: null, game: 0, region: null, chain: false };
+const S = { view: 'hardware', profile: 'mid', hw: null, net: null, seen: false, offer: null, running: null, game: 0, region: null, focusTool: null };
 try { const p = localStorage.getItem('xla-profile'); if (PROFILES[p]) S.profile = p; } catch { }
 
-/* ---------- Navegação ---------- */
-const TITLES = { welcome: ['Overview', 'Free check-up'], hardware: ['Hardware analysis', 'Your PC'], network: ['Network analysis', 'Your connection'], report: ['Your report', 'What to fix first'] };
+/* ---------- Navegação: fluxo linear ----------
+   Hardware › Rede › Resultados › Plano › Login (fim). Cada etapa abre quando a anterior termina. */
+const STEPS = ['hardware', 'network', 'results', 'plan', 'login'];
+const TITLES = { hardware: ['Hardware analysis', 'Step 1 of 3'], network: ['Network analysis', 'Step 2 of 3'], results: ['Your results', 'Step 3 of 3'], plan: ['Choose a plan', 'Get ExitLag'], login: ['Log in', 'Get ExitLag'] };
+const NEED = { network: () => !!S.hw, results: () => !!(S.hw && S.net), plan: () => S.seen, login: () => !!S.offer };
+const BLOCK = { network: 'Finish the hardware analysis first.', results: 'Finish the network analysis first.', plan: 'See your results first.', login: 'Choose a plan first.' };
+const reachable = v => !NEED[v] || NEED[v]();
 function go(view) {
   if (S.running && view !== S.running) { toast('Analysis in progress', 'Wait for it to finish, it only takes a few seconds.'); return; }
+  if (!reachable(view)) { toast('One step at a time', BLOCK[view]); return; }
   S.view = view; app.dataset.view = view;
+  if (view === 'results') S.seen = true;
   document.querySelectorAll('.view').forEach(v => { const on = v.id === 'view-' + view; if (on && v.hidden) { v.hidden = false; v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); } else if (!on) v.hidden = true; });
-  document.querySelectorAll('.nav-item[data-go]').forEach(n => { const on = n.dataset.go === view; n.classList.toggle('sel', on); on ? n.setAttribute('aria-current', 'page') : n.removeAttribute('aria-current'); });
   document.querySelectorAll('[data-jump]').forEach(b => b.setAttribute('aria-pressed', b.dataset.jump === view));
   $('tbTitle').textContent = TITLES[view][0]; $('tbCrumb').textContent = TITLES[view][1];
   $('main').scrollTop = 0;
-  if (view === 'welcome') { globe && globe.idle(); globe && globe.scan(false); clearTags(); }
   if (view === 'network' && !S.running) { if (S.net) renderNetDone(true); else { showNetStage('setup'); globe && globe.idle(); } }
-  if (view === 'report') renderReport();
+  if (view === 'login') { globe && globe.idle(); globe && globe.scan(false); clearTags(); renderLogin(); }
+  if (view === 'results') renderReport();
+  if (view === 'plan') renderPlan();
   if (view === 'hardware' && !S.running) renderParts();
+  markNav();
 }
 document.addEventListener('click', e => {
   const g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); go(g.dataset.go); return; }
   const j = e.target.closest('[data-jump]'); if (j) { jump(j.dataset.jump); return; }
-  const pw = e.target.closest('[data-paywall]'); if (pw) { openPaywall(pw.dataset.paywall); return; }
-  const t = e.target.closest('[data-tool]'); if (t) { toolAction(t.dataset.tool, t); return; }
+  const t = e.target.closest('[data-tool]'); if (t) { toolAction(t.dataset.tool); return; }
 });
 document.querySelectorAll('.nav-item').forEach(n => n.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); n.click(); } }));
-$('signIn').addEventListener('click', () => toast('Sign in is optional', 'Everything here works without an account. Sign in only to use a plan you already have.'));
+// quem já é assinante pula direto para o login
+$('signIn').addEventListener('click', () => { if (S.running) return; S.offer = S.offer || 'login'; S.loginMode = 'login'; go('login'); });
 
-// chips do protótipo: pulam direto para uma etapa, com a análise anterior já pronta quando preciso
-async function jump(view) {
+// chips do protótipo: pulam direto para uma etapa, preenchendo as anteriores com resultados simulados
+function jump(view) {
   if (S.running) return;
-  if (view === 'report') { if (!S.hw) S.hw = hwResult(); if (!S.net) S.net = netResult(simulate(GAMES[S.game], S.region || nearest(GAMES[S.game]))); markNav(); }
+  const k = STEPS.indexOf(view);
+  if (k >= 1 && !S.hw) S.hw = hwResult();
+  if (k >= 2 && !S.net) S.net = netResult(simulate(GAMES[S.game], S.region || nearest(GAMES[S.game])));
+  if (k >= 3) S.seen = true;
+  if (k >= 4 && !S.offer) S.offer = 'trial';
+  if (view === 'login') S.loginMode = S.offer === 'login' ? 'login' : 'signup';
   go(view);
-  if (view === 'hardware' && !S.hw) renderParts();
 }
 document.querySelectorAll('[data-profile]').forEach(b => b.addEventListener('click', () => {
   if (S.running) return;
   S.profile = b.dataset.profile; try { localStorage.setItem('xla-profile', S.profile); } catch { }
   document.querySelectorAll('[data-profile]').forEach(x => x.setAttribute('aria-pressed', x === b));
-  // trocar de PC zera a análise de hardware (a de rede depende do adaptador: refaz se já tinha rodado)
-  const hadHw = !!S.hw; S.hw = null;
+  // trocar de PC refaz o resultado de hardware (e o de rede, que depende do adaptador) sem voltar o fluxo
+  if (S.hw) S.hw = hwResult();
   if (S.net) S.net = netResult(simulate(GAMES[S.game], S.region || nearest(GAMES[S.game])));
-  if (hadHw && S.view === 'report') S.hw = hwResult();
   markNav(); renderParts();
-  if (S.view === 'report') renderReport();
+  if (S.view === 'results') renderReport();
+  if (S.view === 'plan') renderPlan();
   if (S.view === 'network' && S.net) renderNetDone(true);
-  toast('Simulated PC changed', `${PROFILES[S.profile].tier.name}. Run the hardware analysis to read it.`);
+  toast('Simulated PC changed', `${PROFILES[S.profile].tier.name}. Run the hardware analysis again to watch it being read.`);
 }));
 document.querySelectorAll('[data-profile]').forEach(x => x.setAttribute('aria-pressed', x.dataset.profile === S.profile));
 
 function markNav() {
-  const st = (k, v) => { const el = document.querySelector(`[data-st="${k}"]`); if (el) el.innerHTML = v; };
-  st('hardware', S.running === 'hardware' ? '<span class="spin"></span>' : S.hw ? `<span class="done">${icon('check', 'xs')}</span>` : '');
-  st('network', S.running === 'network' ? '<span class="spin"></span>' : S.net ? `<span class="done">${icon('check', 'xs')}</span>` : '');
-  st('report', S.hw && S.net ? `<span class="done">${icon('check', 'xs')}</span>` : '');
-  $('wlHwSt').className = 'badge ' + (S.hw ? 'success' : 'neutral'); $('wlHwSt').textContent = S.hw ? 'Done · ' + S.hw.tier.name : 'About 15 s';
-  $('wlNetSt').className = 'badge ' + (S.net ? 'success' : 'neutral'); $('wlNetSt').textContent = S.net ? 'Done · ' + S.net.game.name : 'About 30 s';
-  $('wlReport').hidden = !(S.hw || S.net);
-  $('startAll').textContent = S.hw && S.net ? 'Run check-up again' : S.hw ? 'Continue: network' : 'Start check-up';
+  const ok = `<span class="done">${icon('check', 'xs')}</span>`, lock = icon('lock', 'xs');
+  const done = { hardware: !!S.hw, network: !!S.net, results: S.seen && S.view !== 'results', plan: !!S.offer && S.view !== 'plan', login: false };
+  document.querySelectorAll('.nav-item[data-go]').forEach(n => {
+    const v = n.dataset.go, on = v === S.view, can = reachable(v);
+    n.classList.toggle('sel', on); on ? n.setAttribute('aria-current', 'page') : n.removeAttribute('aria-current');
+    n.setAttribute('aria-disabled', !can);
+    const st = n.querySelector('.nav-st');
+    st.innerHTML = S.running === v ? '<span class="spin"></span>' : done[v] ? ok : !can ? lock : '';
+  });
 }
-$('startAll').addEventListener('click', () => {
-  if (S.hw && !S.net) { go('network'); return; }
-  S.chain = true; go('hardware'); runHardware();
-});
 
 /* ---------- Análise de hardware ---------- */
 const sevRank = { critical: 0, warning: 1, success: 2 };
@@ -237,7 +245,7 @@ function hwResult() {
 }
 function fixChips(fix) {
   return (fix || []).map(f => typeof f === 'string'
-    ? `<button class="tool-chip${S.applied.has(f) ? ' applied' : ''}" type="button" data-tool="${f}">${icon(TOOLS[f].icon, 'xs')}${TOOLS[f].name}${S.applied.has(f) ? ' · Applied' : ''}<span class="lock">${icon('lock', 'xs')}</span></button>`
+    ? `<button class="tool-chip" type="button" data-tool="${f}" data-tip="${TOOLS[f].pitch}">${icon(TOOLS[f].icon, 'xs')}${TOOLS[f].name}<span class="lock">${icon('lock', 'xs')}</span></button>`
     : `<span class="tool-chip free">${f.free}</span>`).join('');
 }
 const findHTML = (f, src) => `<div class="find"><span class="sev ${f.sev}"></span><div class="txt">
@@ -266,7 +274,7 @@ function renderParts() {
     setTier(null);
     $('hwFind').innerHTML = `<p class="body t-var">Findings show up here as each part is read.</p><button class="btn filled" type="button" id="hwStart" style="align-self:flex-start">Run hardware analysis</button>`;
     $('hwStart').addEventListener('click', runHardware);
-    $('hwFindCount').textContent = ''; $('upW').hidden = true; $('hwNext').hidden = true;
+    $('hwFindCount').textContent = ''; $('upW').hidden = true; $('hwNext').hidden = true; $('hwCont').hidden = true;
   } else {
     setTier(R.tier);
     paintHwFindings(R.findings);
@@ -292,7 +300,7 @@ function paintHwFindings(list) {
 }
 function paintUpgrades(ups) { $('upW').hidden = !ups.length; $('upList').innerHTML = ups.map(upHTML).join(''); }
 function paintHwNext() {
-  $('hwNext').hidden = !!S.net;
+  $('hwNext').hidden = false; $('hwIntro').hidden = true; $('hwCont').hidden = false;
   $('hwNextTxt').textContent = S.hw.tier.score >= 75 ? 'Your PC is ready. If games still lag, the route to the server is the next place to look.' : 'Lag also comes from the route to the game server. Test it next.';
 }
 async function runHardware() {
@@ -321,7 +329,6 @@ async function runHardware() {
   paintUpgrades(S.hw.upgrades); paintHwNext();
   $('hwStatus').textContent = 'Done · just now'; $('hwAgain').hidden = false; $('hwProg').hidden = true; $('partsCount').textContent = `${P.parts.length} checked`;
   markNav();
-  if (S.chain) { S.chain = false; toast('Hardware analysis done', `${S.hw.tier.name} PC · ${S.hw.findings.length} things to improve. Next: your connection.`); }
 }
 $('hwAgain').addEventListener('click', runHardware);
 
@@ -393,7 +400,7 @@ function stats(samples) {
   const sorted = [...ok].sort((a, b) => a - b), med = sorted[Math.floor(sorted.length / 2)] || 0;
   let spikes = 0, inSpike = false; for (const v of ok) { const s = v > med * 1.5 && v > med + 25; if (s && !inSpike) spikes++; inSpike = s; }
   const loss = samples.filter(s => s.lost).length / Math.max(samples.length, 1) * 100;
-  const score = Math.round(clamp(100 - jit * 2.4 - loss * 11 - spikes * 4 - Math.max(0, avg - 60) * 0.12, 5, 99));
+  const score = Math.round(clamp(100 - jit * 1.6 - loss * 6 - spikes * 3 - Math.max(0, avg - 60) * 0.08, 12, 99));
   return { avg, jit, loss, spikes, score, max: Math.max(...ok, 1) };
 }
 // resultado completo sem rodar a animação (chips do protótipo e troca de perfil)
@@ -570,55 +577,72 @@ function renderReport() {
   const order = Object.keys(count).sort((a, b) => count[b] - count[a]);
   $('rpFix').innerHTML = order.map(k => `<div class="fix-row"><span class="ic">${icon(TOOLS[k].icon)}</span><span class="txt"><b>${TOOLS[k].name}</b><span class="small t-var">${effect[k]}</span></span><span class="badge neutral tnum">${count[k]} fix${count[k] > 1 ? 'es' : ''}</span></div>`).join('')
     || '<p class="body t-var">Nothing here needs ExitLag.</p>';
-  $('rpTrial').textContent = S.trial ? 'Apply all fixes' : 'Start 3-day free trial';
-  if (S.trial) delete $('rpTrial').dataset.paywall; else $('rpTrial').dataset.paywall = 'trial';
-  $('rpTrial').onclick = S.trial ? () => { order.forEach(k => S.applied.add(k)); toast('All fixes applied', order.map(k => TOOLS[k].name).join(', ')); renderReport(); } : null;
   const ups = H ? H.upgrades : [];
   $('rpUp').hidden = !ups.length; $('rpUpList').innerHTML = ups.map(upHTML).join('');
 }
-$('rpStart').addEventListener('click', () => { S.chain = true; go('hardware'); runHardware(); });
 
-/* ---------- Teste grátis e planos ---------- */
-const PLANS = [{ id: 'm', n: 'Monthly', p: 6.49, per: '/month', sub: 'Billed every month' }, { id: 'q', n: 'Quarterly', p: 5.66, per: '/month', sub: '$16.99 every 3 months' }, { id: 'y', n: 'Yearly', p: 4.99, per: '/month', sub: '$59.88 per year', best: true }];
-let planSel = 'y', lastFocus = null;
-function openPaywall(ctx) {
-  if (S.trial && ctx !== 'plans') { toast('Your free trial is on', 'All tools are unlocked. Use them from the report.'); return; }
-  lastFocus = document.activeElement;
-  const t = TOOLS[ctx];
-  $('pwEyebrow').textContent = t ? 'Included in every plan' : 'ExitLag';
-  $('pwTitle').textContent = t ? `Unlock ${t.name}` : ctx === 'plans' ? 'Choose your plan' : 'Fix what we found';
-  const n = [...(S.hw ? S.hw.findings : []), ...(S.net ? S.net.findings : [])].filter(f => (f.fix || []).some(x => typeof x === 'string')).length;
-  $('pwDesc').textContent = t ? t.pitch : n ? `ExitLag fixes ${n} of the problems in your report. Try every tool free for 3 days, then pick a plan.` : 'Try every tool free for 3 days, then pick a plan.';
-  $('pwUnlocks').innerHTML = Object.values(TOOLS).map(x => `<span>${icon('check', 'sm')}${x.name}</span>`).join('') + `<span>${icon('check', 'sm')}1,800 games · 1,500+ servers</span>`;
-  $('plans').innerHTML = PLANS.map(p => `<button class="plan" type="button" data-plan="${p.id}" aria-pressed="${p.id === planSel}"><span class="t-em">${p.n}</span><span class="pr"><b class="tnum">$${p.p}</b><span class="small t-var">${p.per}</span></span><span class="small t-var">${p.sub}</span>${p.best ? '<span class="badge success">Best value</span>' : ''}</button>`).join('');
-  $('plans').querySelectorAll('.plan').forEach(b => b.addEventListener('click', () => { planSel = b.dataset.plan; $('plans').querySelectorAll('.plan').forEach(x => x.setAttribute('aria-pressed', x === b)); }));
-  $('pwPick').hidden = false; $('pwDone').hidden = true;
-  $('mdOverlay').hidden = false; $('paywall').hidden = false;
-  requestAnimationFrame(() => { $('mdOverlay').classList.add('show'); $('paywall').classList.add('show'); $('pwTrial').focus(); });
+/* ---------- Plano (CTA) ---------- */
+const PLANS = [{ id: 'm', n: 'Monthly', p: 6.49, sub: 'Billed every month' }, { id: 'q', n: 'Quarterly', p: 5.66, sub: '$16.99 every 3 months' }, { id: 'y', n: 'Yearly', p: 4.99, sub: '$59.88 per year', best: true }];
+let pick = 'trial';
+function renderPlan() {
+  const all = [...(S.hw ? S.hw.findings : []), ...(S.net ? S.net.findings : [])];
+  const count = {}; all.forEach(f => (f.fix || []).forEach(x => { if (typeof x === 'string') count[x] = (count[x] || 0) + 1; }));
+  const n = all.filter(f => (f.fix || []).some(x => typeof x === 'string')).length;
+  $('plHead').textContent = n ? `Fix ${n} of the ${all.length} problems we found.` : 'Play without lag.';
+  $('plDesc').textContent = S.net ? `Starting with your route to ${S.net.m.srv[2]}: ${Math.round(S.net.I.avg)} → ${Math.round(S.net.X.avg)} ms and no packet loss, as measured a minute ago. Every tool below is in every plan.` : 'Every tool below is included in every plan.';
+  $('plEyebrow').textContent = S.focusTool ? `${TOOLS[S.focusTool].name} is included in every plan` : 'Based on your results';
+  const order = Object.keys(TOOLS).sort((a, b) => (count[b] || 0) - (count[a] || 0));
+  $('plFixes').innerHTML = order.map(k => `<div class="pl-fix${count[k] ? '' : ' dim'}"><span class="ic">${icon(TOOLS[k].icon)}</span><span class="txt"><b>${TOOLS[k].name}${count[k] ? `<span class="badge neutral tnum">${count[k]} fix${count[k] > 1 ? 'es' : ''}</span>` : ''}</b><span class="small t-var">${TOOLS[k].pitch}</span></span></div>`).join('');
+  $('plans').innerHTML = PLANS.map(p => `<button class="plan" type="button" data-plan="${p.id}" aria-pressed="${p.id === pick}"><span class="nm"><span class="t-em">${p.n}</span><span class="small t-var">${p.sub}</span></span>${p.best ? '<span class="badge success">Best value</span>' : ''}<span class="pr"><b class="tnum">$${p.p}</b><span class="small t-var">/mo</span></span></button>`).join('');
+  $('plans').querySelectorAll('.plan').forEach(b => b.addEventListener('click', () => setPick(b.dataset.plan)));
+  setPick(pick);
 }
-function closePaywall() {
-  $('mdOverlay').classList.remove('show'); $('paywall').classList.remove('show');
-  setTimeout(() => { $('mdOverlay').hidden = true; $('paywall').hidden = true; }, reduce ? 0 : 220);
-  if (lastFocus && lastFocus.focus) lastFocus.focus();
+function setPick(id) {
+  pick = id;
+  $('offTrial').setAttribute('aria-pressed', id === 'trial');
+  $('plans').querySelectorAll('.plan').forEach(x => x.setAttribute('aria-pressed', x.dataset.plan === id));
+  const p = PLANS.find(x => x.id === id);
+  $('plGo').textContent = p ? `Subscribe · $${p.p}/mo` : 'Start free trial';
 }
-$('paywall').addEventListener('click', e => { if (e.target.closest('[data-close]')) closePaywall(); });
-$('mdOverlay').addEventListener('click', closePaywall);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('paywall').hidden) closePaywall(); });
-function startTrial(title, desc) {
-  S.trial = true; app.classList.add('trial');
-  $('pwDoneTitle').textContent = title; $('pwDoneDesc').textContent = desc;
-  $('pwPick').hidden = true; $('pwDone').hidden = false; $('pwGo').focus();
-}
-$('pwTrial').addEventListener('click', () => startTrial('Your free trial is on', 'Route Optimizer, FPS Boost, RAM Cleaner, DNS Optimizer and Multi Internet are unlocked for 3 days.'));
-$('pwBuy').addEventListener('click', () => { const p = PLANS.find(x => x.id === planSel); startTrial('Welcome to ExitLag', `${p.n} plan active. Every tool is unlocked.`); $('app').querySelector('.trial-chip').innerHTML = `<span class="dot"></span>${p.n} plan`; });
-$('pwGo').addEventListener('click', () => { closePaywall(); go('report'); toast('Tools unlocked', 'Apply each fix from your report, or all at once.'); });
+$('offTrial').addEventListener('click', () => setPick('trial'));
+$('plGo').addEventListener('click', () => { S.offer = pick; S.loginMode = 'signup'; go('login'); });
 
-// ferramenta: travada abre o paywall com o contexto dela; com o teste ativo, aplica e marca como aplicada
-function toolAction(id, el) {
-  if (!S.trial) { openPaywall(id); return; }
-  S.applied.add(id);
-  toast(`${TOOLS[id].name} applied`, TOOLS[id].pitch);
-  document.querySelectorAll(`.tool-chip[data-tool="${id}"]`).forEach(c => { c.classList.add('applied'); c.innerHTML = `${icon('check', 'xs')}${TOOLS[id].name} · Applied`; });
+/* ---------- Login: fim do fluxo ---------- */
+function renderLogin() {
+  const p = PLANS.find(x => x.id === S.offer), signup = S.loginMode !== 'login';
+  $('lgForm').hidden = false; $('lgDone').hidden = true; document.querySelector('.lg-head').hidden = false; $('lgErr').textContent = '';
+  $('lgPlan').hidden = S.offer === 'login';
+  $('lgPlan').textContent = p ? `${p.n} plan · $${p.p}/mo` : '3-day free trial';
+  $('lgTitle').textContent = signup ? 'Create your account' : 'Log in to ExitLag';
+  $('lgDesc').textContent = signup ? 'Your results come with you, so ExitLag can start fixing them right away.' : 'Your results from this check-up come with you.';
+  $('lgPass').autocomplete = signup ? 'new-password' : 'current-password';
+  $('lgSubmit').textContent = signup ? (p ? 'Create account and subscribe' : 'Create account and start trial') : 'Log in';
+  $('lgSwitchTxt').textContent = signup ? 'Already have an account?' : 'New to ExitLag?';
+  $('lgSwitch').textContent = signup ? 'Log in' : 'Create an account';
+}
+$('lgSwitch').addEventListener('click', () => { S.loginMode = S.loginMode === 'login' ? 'signup' : 'login'; renderLogin(); });
+function finishLogin(how) {
+  $('lgForm').hidden = true; document.querySelector('.lg-head').hidden = true; const d = $('lgDone'); d.hidden = false; d.classList.remove('in'); void d.offsetWidth; d.classList.add('in');
+  const p = PLANS.find(x => x.id === S.offer);
+  $('lgDoneTxt').textContent = `${how}${p ? ` ${p.n} plan active.` : S.offer === 'trial' ? ' Your 3-day free trial is on.' : ''} This is where the prototype ends: in the app, ExitLag opens and applies the fixes from your results.`;
+  markNav();
+}
+$('lgForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const em = $('lgEmail'), pw = $('lgPass');
+  const bad = [[em, !/^\S+@\S+\.\S+$/.test(em.value), 'Enter a valid email address.'], [pw, pw.value.length < 8, 'Use at least 8 characters for your password.']];
+  bad.forEach(([el, b]) => el.parentElement.classList.toggle('bad', b));
+  const first = bad.find(x => x[1]);
+  if (first) { $('lgErr').textContent = first[2]; first[0].focus(); return; }
+  finishLogin(S.loginMode === 'login' ? 'Logged in.' : 'Account created.');
+});
+$('lgGoogle').addEventListener('click', () => finishLogin('Signed in with Google.'));
+$('lgRestart').addEventListener('click', () => { S.hw = S.net = S.offer = null; S.seen = false; S.focusTool = null; pick = 'trial'; $('lgEmail').value = $('lgPass').value = ''; showNetStage('setup'); $('hwIntro').hidden = false; go('hardware'); });
+
+// ferramenta travada: explica o que faz e, depois dos resultados, leva ao plano
+function toolAction(id) {
+  if (reachable('plan')) { S.focusTool = id; go('plan'); return; }
+  toast(`${TOOLS[id].name} is part of ExitLag`, `${TOOLS[id].pitch} Finish the check-up to unlock it.`);
 }
 
 /* ---------- Snackbar e tooltip ---------- */
@@ -642,4 +666,4 @@ document.addEventListener('pointerover', e => {
 /* ---------- Início ---------- */
 markNav(); renderParts(); renderGames();
 const h = location.hash.slice(1);
-if (TITLES[h]) jump(h); else go('welcome');
+if (TITLES[h]) jump(h); else go('hardware');
