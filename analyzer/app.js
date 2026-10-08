@@ -425,6 +425,7 @@ function showResults() {
   const ups = H.upgrades;
   $('res').innerHTML = `
     <div class="res-hero">
+      <button class="icon-btn back-res rs" type="button" id="closeRes" aria-label="Back to log in" title="Back to log in">${icon('back')}</button>
       <span class="eyebrow rs">Your results · ${N.game.name} · ${origin[2]} → ${N.m.srv[2]}</span>
       <h1 class="rs" id="resTitle">${head}</h1>
       <p class="body-lg rs">We found ${all.length} problems. ExitLag fixes ${fixable} of them, starting with ${all[0] ? all[0].t.charAt(0).toLowerCase() + all[0].t.slice(1) : 'your route'}.</p>
@@ -489,7 +490,7 @@ function setPick(id) {
   if ($('offerGo')) $('offerGo').textContent = p ? `Subscribe · $${p.p}/mo` : 'Start free trial';
 }
 // fechar os resultados: volta para a tela de login (o check-up pode ser refeito de lá)
-$('closeRes').addEventListener('click', () => { S.runId++; S.running = false; app.classList.remove('net-on', 'xl-on'); clearTags(); scene('entry'); });
+document.addEventListener('click', e => { if (!e.target.closest('#closeRes')) return; S.runId++; S.running = false; app.classList.remove('net-on', 'xl-on'); clearTags(); scene('entry'); });
 $('dockGo').addEventListener('click', () => { const s = $('s-results'), o = $('offer'); s.scrollTo({ top: o.offsetTop - (s.clientHeight - o.offsetHeight) / 2, behavior: reduce ? 'auto' : 'smooth' }); });
 document.addEventListener('click', e => { const o = e.target.closest('[data-offer]'); if (o) toast('Opens the partner store', `${o.dataset.offer}, at the best price found today. Link not active in the prototype.`); });
 
