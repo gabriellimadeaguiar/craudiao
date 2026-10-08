@@ -91,7 +91,6 @@ svg.i.xs { width: 16px; height: 16px; }
 .btn.filled:active { background: var(--primary-pressed); transform: scale(.98); }
 .btn.outlined { border: 1px solid var(--stroke); }
 .btn.outlined:hover { background: var(--state-hover); }
-.btn.lg { height: 56px; padding: 0 var(--sp-2xl); font-size: 16px; border-radius: 6px; }
 .btn.block { width: 100%; }
 .link { text-decoration: underline; cursor: pointer; transition: color .15s ease; }
 .link:hover { color: var(--on-surface-variant); }
@@ -173,10 +172,10 @@ svg.i.xs { width: 16px; height: 16px; }
 .check .txt { display: flex; flex-direction: column; gap: 2px; padding-top: 1px; }
 .check b { font-weight: 500; line-height: 20px; letter-spacing: .25px; }
 .start-row { display: flex; align-items: center; gap: var(--sp-lg); margin-top: var(--sp-sm); }
-.game-pick { display: flex; align-items: center; gap: var(--sp-md); height: 56px; padding: 0 var(--sp-lg) 0 var(--sp-sm); border-radius: 6px; background: var(--glass); box-shadow: inset 0 0 0 1px var(--divider); backdrop-filter: blur(8px); text-align: left; transition: box-shadow .15s ease, background-color .15s ease; }
+.game-pick { display: flex; align-items: center; gap: var(--sp-sm); height: 40px; padding: 0 var(--sp-md) 0 var(--sp-sm); border-radius: 4px; background: var(--glass); box-shadow: inset 0 0 0 1px var(--divider); backdrop-filter: blur(8px); text-align: left; transition: box-shadow .15s ease, background-color .15s ease; }
 .game-pick:hover { box-shadow: inset 0 0 0 1px var(--stroke); background: #191d24cc; }
-.game-pick .cv { width: 32px; height: 40px; border-radius: 4px; background: center / cover no-repeat var(--input); }
-.game-pick .txt { display: flex; flex-direction: column; }
+.game-pick .cv { width: 24px; height: 24px; border-radius: 2px; background: center / cover no-repeat var(--input); }
+.game-pick .txt { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
 .game-pick .chev { width: 8px; height: 8px; border-right: 1.5px solid var(--on-surface-variant); border-bottom: 1.5px solid var(--on-surface-variant); rotate: 45deg; translate: 0 -2px; margin-left: var(--sp-sm); }
 .picker { position: absolute; z-index: 60; left: 696px; bottom: 150px; width: 560px; padding: var(--sp-xl); border-radius: 16px; background: #111317f5; box-shadow: var(--shadow-panel), inset 0 0 0 1px var(--divider);
   display: flex; flex-direction: column; gap: var(--sp-lg); transform-origin: 0% 80%; transition: opacity var(--dur-200) var(--ease-standard), transform var(--dur-300) var(--ease-spring); }
@@ -372,7 +371,7 @@ svg.i.xs { width: 16px; height: 16px; }
 .lg-head h2 { font-family: var(--font-display); font-weight: 700; font-size: 34px; line-height: 38px; }
 .lg-form { display: flex; flex-direction: column; gap: var(--sp-lg); }
 .field { display: flex; flex-direction: column; gap: 6px; }
-.input { height: 44px; background: var(--input); border-radius: 6px; padding: 0 var(--sp-md); display: flex; align-items: center; gap: var(--sp-sm); color: var(--on-surface-variant); transition: background-color var(--dur-100) var(--ease-standard), box-shadow var(--dur-100) var(--ease-standard); }
+.input { height: 40px; background: var(--input); border-radius: 4px; padding: 0 var(--sp-md); display: flex; align-items: center; gap: var(--sp-sm); color: var(--on-surface-variant); transition: background-color var(--dur-100) var(--ease-standard), box-shadow var(--dur-100) var(--ease-standard); }
 .input:hover, .input:focus-within { background: var(--input-hover); }
 .input.bad { box-shadow: inset 0 0 0 1px var(--primary); }
 .input input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--on-surface); font: inherit; letter-spacing: .25px; }
@@ -479,7 +478,7 @@ svg.i.xs { width: 16px; height: 16px; }
           <label class="field"><span class="en-row"><span class="small t-var">Password</span><button class="link small t-var" type="button" id="enForgot">Forgot password?</button></span><span class="input"><svg class="i sm"><use href="#i-lock"/></svg><input id="enPass" type="password" autocomplete="current-password" placeholder="Your password" required></span></label>
           <label class="remember small"><input type="checkbox" id="enKeep" checked><span class="box"><svg class="i xs"><use href="#i-check"/></svg></span>Keep me logged in on this PC</label>
           <p class="small lg-err" id="enErr" role="alert"></p>
-          <button class="btn filled lg block" type="submit">Log in</button>
+          <button class="btn filled block" type="submit">Log in</button>
           <div class="or small t-var"><span></span>or<span></span></div>
           <button class="btn outlined block" type="button" id="enGoogle">Continue with Google</button>
         </form>
@@ -499,7 +498,7 @@ svg.i.xs { width: 16px; height: 16px; }
           <li><span class="ic"><svg class="i sm"><use href="#i-net"/></svg></span><span><b>Your connection</b><span class="small t-var">Your route to the game server, today and through ExitLag</span></span></li>
           <li><span class="ic"><svg class="i sm"><use href="#i-report"/></svg></span><span><b>A clear result</b><span class="small t-var">What to fix first, and what ExitLag fixes for you</span></span></li>
         </ul>
-        <button class="btn filled lg block" type="button" id="enCheck">Start free check-up</button>
+        <button class="btn outlined block" type="button" id="enCheck">Start free check-up</button>
         <span class="small t-var cta-note"><svg class="i xs"><use href="#i-clock"/></svg>About a minute · free · no account needed</span>
       </aside>
     </section>
@@ -514,7 +513,7 @@ svg.i.xs { width: 16px; height: 16px; }
           <div class="check rv" style="--d:280"><span class="ic"><svg class="i sm"><use href="#i-net"/></svg></span><span class="txt"><b>Your connection</b><span class="small t-var">Your route to the game server as it is today, then the same route through ExitLag</span></span></div>
         </div>
         <div class="start-row rv" style="--d:400">
-          <button class="btn filled lg" type="button" id="start">Start analysis</button>
+          <button class="btn filled" type="button" id="start">Start analysis</button>
           <button class="game-pick" type="button" id="gamePick" aria-expanded="false" aria-controls="picker"><span class="cv" id="gpCover"></span><span class="txt"><span class="small t-var">Testing with</span><span class="t-em" id="gpName"></span></span><span class="chev"></span></button>
         </div>
       </div>
@@ -590,7 +589,7 @@ svg.i.xs { width: 16px; height: 16px; }
           <label class="field"><span class="small t-var">Email</span><span class="input"><svg class="i sm"><use href="#i-mail"/></svg><input id="lgEmail" type="email" autocomplete="email" placeholder="you@example.com" required></span></label>
           <label class="field"><span class="small t-var">Password</span><span class="input"><svg class="i sm"><use href="#i-lock"/></svg><input id="lgPass" type="password" autocomplete="new-password" placeholder="At least 8 characters" required minlength="8"></span></label>
           <p class="small lg-err" id="lgErr" role="alert"></p>
-          <button class="btn filled lg block" type="submit" id="lgSubmit">Create account and start trial</button>
+          <button class="btn filled block" type="submit" id="lgSubmit">Create account and start trial</button>
           <div class="or small t-var"><span></span>or<span></span></div>
           <button class="btn outlined block" type="button" id="lgGoogle">Continue with Google</button>
           <p class="small t-var lg-switch"><span id="lgSwitchTxt">Already have an account?</span> <button class="link" type="button" id="lgSwitch">Log in</button></p>

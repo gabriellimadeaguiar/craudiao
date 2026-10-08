@@ -461,7 +461,7 @@ function showResults() {
       <div class="offer-r">
         <button class="offer" type="button" data-pick="trial"><span class="top"><b>3-day free trial</b><span class="badge success">Start here</span></span><span class="small t-var">Every tool, no charge for 3 days. Pick a plan when it ends.</span></button>
         ${PLANS.map(p => `<button class="plan" type="button" data-pick="${p.id}"><span class="nm"><span class="t-em">${p.n}</span><span class="small t-var">${p.sub}</span></span>${p.best ? '<span class="badge success">Best value</span>' : ''}<span class="pr"><b class="tnum">$${p.p}</b><span class="small t-var">/mo</span></span></button>`).join('')}
-        <button class="btn filled lg block" type="button" id="offerGo">Start free trial</button>
+        <button class="btn filled block" type="button" id="offerGo">Start free trial</button>
         <p class="small t-var">Prototype: example prices. You'll create your account next.</p>
       </div>
     </div>`;
