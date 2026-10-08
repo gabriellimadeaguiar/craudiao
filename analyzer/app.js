@@ -488,6 +488,8 @@ function setPick(id) {
   const p = PLANS.find(x => x.id === id);
   if ($('offerGo')) $('offerGo').textContent = p ? `Subscribe · $${p.p}/mo` : 'Start free trial';
 }
+// fechar os resultados: volta para a tela de login (o check-up pode ser refeito de lá)
+$('closeRes').addEventListener('click', () => { S.runId++; S.running = false; app.classList.remove('net-on', 'xl-on'); clearTags(); scene('entry'); });
 $('dockGo').addEventListener('click', () => { const s = $('s-results'), o = $('offer'); s.scrollTo({ top: o.offsetTop - (s.clientHeight - o.offsetHeight) / 2, behavior: reduce ? 'auto' : 'smooth' }); });
 document.addEventListener('click', e => { const o = e.target.closest('[data-offer]'); if (o) toast('Opens the partner store', `${o.dataset.offer}, at the best price found today. Link not active in the prototype.`); });
 

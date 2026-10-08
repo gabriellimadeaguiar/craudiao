@@ -393,6 +393,13 @@ svg.i.xs { width: 16px; height: 16px; }
 .home-frame { position: fixed; inset: 0; z-index: 1000; width: 100%; height: 100%; border: 0; background: #050608; opacity: 0; transition: opacity 600ms var(--ease-decelerate); }
 .home-frame.in { opacity: 1; }
 
+/* fechar os resultados e voltar ao login: só aparece na cena de resultados */
+.close-res { display: none; }
+.app[data-scene="results"] .close-res { display: inline-flex; animation: rise 500ms var(--ease-decelerate) 400ms both; }
+.close-res.btn { background: #111317b3; backdrop-filter: blur(10px); }
+.close-res.btn svg { width: 18px; height: 18px; }
+.vdiv { width: 1px; height: 16px; background: var(--divider); margin: 0 var(--sp-sm); }
+
 /* snackbar */
 .snackbar { position: absolute; left: 50%; bottom: var(--sp-xl); z-index: 600; width: 380px; translate: -50% 0; border-radius: 10px; overflow: hidden; background: var(--input); box-shadow: var(--shadow-panel);
   transform: translateY(calc(100% + 24px)); transition: transform var(--dur-200) var(--ease-accelerate); }
@@ -469,6 +476,8 @@ svg.i.xs { width: 16px; height: 16px; }
 
     <div class="corner l"><img class="logo" src="logo.svg" alt="ExitLag"></div>
     <div class="corner r">
+      <button class="btn outlined close-res" type="button" id="closeRes"><svg class="i sm"><use href="#i-close"/></svg>Close results</button>
+      <span class="vdiv close-res" aria-hidden="true"></span>
       <button class="icon-btn" type="button" aria-label="Minimize"><svg class="i"><use href="#i-min"/></svg></button>
       <button class="icon-btn" type="button" aria-label="Close"><svg class="i"><use href="#i-close"/></svg></button>
     </div>
