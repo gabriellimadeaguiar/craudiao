@@ -1,5 +1,6 @@
 
-/* ExitLag Analyzer: check-up sem login. Duas análises (hardware e rede), um relatório e o caminho para o teste grátis.
+/* ExitLag Analyzer: experiência de tela inteira, sem login até o fim. A análise roda de uma vez (PC e depois conexão),
+   em seguida vêm os resultados com a oferta, e o fluxo termina no login.
    Tudo o que é medido aqui é SIMULADO para o protótipo: as peças vêm de três perfis de PC e a rede é modelada pela
    distância (≈1,1 ms a cada 100 km de fibra), com desvio, perda e picos sorteados para a rota da operadora. */
 
@@ -162,194 +163,7 @@ const PROFILES = {
   }
 };
 
-/* ---------- Estado ---------- */
-const S = { view: 'hardware', profile: 'mid', hw: null, net: null, seen: false, offer: null, running: null, game: 0, region: null, focusTool: null };
-try { const p = localStorage.getItem('xla-profile'); if (PROFILES[p]) S.profile = p; } catch { }
 
-/* ---------- Navegação: fluxo linear ----------
-   Hardware › Rede › Resultados › Plano › Login (fim). Cada etapa abre quando a anterior termina. */
-const STEPS = ['hardware', 'network', 'results', 'plan', 'login'];
-const TITLES = { hardware: ['Hardware analysis', 'Step 1 of 3'], network: ['Network analysis', 'Step 2 of 3'], results: ['Your results', 'Step 3 of 3'], plan: ['Choose a plan', 'Get ExitLag'], login: ['Log in', 'Get ExitLag'] };
-const NEED = { network: () => !!S.hw, results: () => !!(S.hw && S.net), plan: () => S.seen, login: () => !!S.offer };
-const BLOCK = { network: 'Finish the hardware analysis first.', results: 'Finish the network analysis first.', plan: 'See your results first.', login: 'Choose a plan first.' };
-const reachable = v => !NEED[v] || NEED[v]();
-function go(view) {
-  if (S.running && view !== S.running) { toast('Analysis in progress', 'Wait for it to finish, it only takes a few seconds.'); return; }
-  if (!reachable(view)) { toast('One step at a time', BLOCK[view]); return; }
-  S.view = view; app.dataset.view = view;
-  if (view === 'results') S.seen = true;
-  document.querySelectorAll('.view').forEach(v => { const on = v.id === 'view-' + view; if (on && v.hidden) { v.hidden = false; v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); } else if (!on) v.hidden = true; });
-  document.querySelectorAll('[data-jump]').forEach(b => b.setAttribute('aria-pressed', b.dataset.jump === view));
-  $('tbTitle').textContent = TITLES[view][0]; $('tbCrumb').textContent = TITLES[view][1];
-  $('main').scrollTop = 0;
-  if (view === 'network' && !S.running) { if (S.net) renderNetDone(true); else { showNetStage('setup'); globe && globe.idle(); } }
-  if (view === 'login') { globe && globe.idle(); globe && globe.scan(false); clearTags(); renderLogin(); }
-  if (view === 'results') renderReport();
-  if (view === 'plan') renderPlan();
-  if (view === 'hardware' && !S.running) renderParts();
-  markNav();
-}
-document.addEventListener('click', e => {
-  const g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); go(g.dataset.go); return; }
-  const j = e.target.closest('[data-jump]'); if (j) { jump(j.dataset.jump); return; }
-  const t = e.target.closest('[data-tool]'); if (t) { toolAction(t.dataset.tool); return; }
-});
-document.querySelectorAll('.nav-item').forEach(n => n.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); n.click(); } }));
-// quem já é assinante pula direto para o login
-$('signIn').addEventListener('click', () => { if (S.running) return; S.offer = S.offer || 'login'; S.loginMode = 'login'; go('login'); });
-
-// chips do protótipo: pulam direto para uma etapa, preenchendo as anteriores com resultados simulados
-function jump(view) {
-  if (S.running) return;
-  const k = STEPS.indexOf(view);
-  if (k >= 1 && !S.hw) S.hw = hwResult();
-  if (k >= 2 && !S.net) S.net = netResult(simulate(GAMES[S.game], S.region || nearest(GAMES[S.game])));
-  if (k >= 3) S.seen = true;
-  if (k >= 4 && !S.offer) S.offer = 'trial';
-  if (view === 'login') S.loginMode = S.offer === 'login' ? 'login' : 'signup';
-  go(view);
-}
-document.querySelectorAll('[data-profile]').forEach(b => b.addEventListener('click', () => {
-  if (S.running) return;
-  S.profile = b.dataset.profile; try { localStorage.setItem('xla-profile', S.profile); } catch { }
-  document.querySelectorAll('[data-profile]').forEach(x => x.setAttribute('aria-pressed', x === b));
-  // trocar de PC refaz o resultado de hardware (e o de rede, que depende do adaptador) sem voltar o fluxo
-  if (S.hw) S.hw = hwResult();
-  if (S.net) S.net = netResult(simulate(GAMES[S.game], S.region || nearest(GAMES[S.game])));
-  markNav(); renderParts();
-  if (S.view === 'results') renderReport();
-  if (S.view === 'plan') renderPlan();
-  if (S.view === 'network' && S.net) renderNetDone(true);
-  toast('Simulated PC changed', `${PROFILES[S.profile].tier.name}. Run the hardware analysis again to watch it being read.`);
-}));
-document.querySelectorAll('[data-profile]').forEach(x => x.setAttribute('aria-pressed', x.dataset.profile === S.profile));
-
-function markNav() {
-  const ok = `<span class="done">${icon('check', 'xs')}</span>`, lock = icon('lock', 'xs');
-  const done = { hardware: !!S.hw, network: !!S.net, results: S.seen && S.view !== 'results', plan: !!S.offer && S.view !== 'plan', login: false };
-  document.querySelectorAll('.nav-item[data-go]').forEach(n => {
-    const v = n.dataset.go, on = v === S.view, can = reachable(v);
-    n.classList.toggle('sel', on); on ? n.setAttribute('aria-current', 'page') : n.removeAttribute('aria-current');
-    n.setAttribute('aria-disabled', !can);
-    const st = n.querySelector('.nav-st');
-    st.innerHTML = S.running === v ? '<span class="spin"></span>' : done[v] ? ok : !can ? lock : '';
-  });
-}
-
-/* ---------- Análise de hardware ---------- */
-const sevRank = { critical: 0, warning: 1, success: 2 };
-const sevLabel = { critical: 'Bottleneck', warning: 'Attention', success: 'Good' };
-function hwResult() {
-  const P = PROFILES[S.profile];
-  return { tier: P.tier, parts: P.parts, upgrades: P.upgrades, findings: P.parts.filter(p => p.find).map(p => ({ ...p.find, src: 'PC', part: p.lbl })) };
-}
-function fixChips(fix) {
-  return (fix || []).map(f => typeof f === 'string'
-    ? `<button class="tool-chip" type="button" data-tool="${f}" data-tip="${TOOLS[f].pitch}">${icon(TOOLS[f].icon, 'xs')}${TOOLS[f].name}<span class="lock">${icon('lock', 'xs')}</span></button>`
-    : `<span class="tool-chip free">${f.free}</span>`).join('');
-}
-const findHTML = (f, src) => `<div class="find"><span class="sev ${f.sev}"></span><div class="txt">
-  <div class="ttl"><b>${f.t}</b>${src ? `<span class="badge neutral">${src}</span>` : ''}<span class="badge ${f.sev}">${sevLabel[f.sev]}</span></div>
-  <p class="desc">${f.d}</p><div class="fixes">${fixChips(f.fix)}</div></div></div>`;
-const upHTML = u => `<div class="upgrade"><div class="art">${icon(u.icon)}</div><div class="txt">
-  <span class="small t-var">${u.part}</span><b class="t-em">${u.name}</b><span class="small t-var">${u.why}</span>
-  <span class="small">${u.gain}</span>
-  <div class="row"><span class="price"><b class="tnum">$${u.price}</b><s class="tnum">$${u.was}</s></span><span class="grow"></span>
-  <a class="btn outlined" href="#" data-offer="${u.name}">See offer</a></div></div></div>`;
-document.addEventListener('click', e => { const o = e.target.closest('[data-offer]'); if (o) { e.preventDefault(); toast('Opens the partner store', `${o.dataset.offer}, at the best price found today. Link not active in the prototype.`); } });
-
-function renderParts() {
-  const P = PROFILES[S.profile], done = !!S.hw;
-  $('parts').querySelectorAll('.part').forEach(p => p.remove());
-  $('parts').insertAdjacentHTML('beforeend', P.parts.map((p, i) => `<div class="part" data-i="${i}">
-    <span class="pic">${icon(PART_ICON[p.k] === 'wifi' && !P.wifi ? 'cable' : PART_ICON[p.k])}</span>
-    <span class="txt"><span class="lbl">${p.lbl}</span>${done ? `<span class="val">${p.val}</span><span class="sub">${p.sub}</span>` : '<span class="val"><span class="sk" style="width:220px"></span></span><span class="sub"><span class="sk" style="width:150px;height:12px"></span></span>'}</span>
-    <span class="st">${done ? `<span class="badge ${p.st}">${p.stl}</span>` : '<span class="small t-var">Waiting</span>'}</span></div>`).join(''));
-  $('partsCount').textContent = done ? `${P.parts.length} checked` : `${P.parts.length} to check`;
-  const R = S.hw;
-  $('hwStatus').textContent = R ? 'Done · just now' : 'Not run yet';
-  $('hwAgain').hidden = !R;
-  $('hwProg').hidden = true;
-  if (!R) {
-    setTier(null);
-    $('hwFind').innerHTML = `<p class="body t-var">Findings show up here as each part is read.</p><button class="btn filled" type="button" id="hwStart" style="align-self:flex-start">Run hardware analysis</button>`;
-    $('hwStart').addEventListener('click', runHardware);
-    $('hwFindCount').textContent = ''; $('upW').hidden = true; $('hwNext').hidden = true; $('hwCont').hidden = true;
-  } else {
-    setTier(R.tier);
-    paintHwFindings(R.findings);
-    paintUpgrades(R.upgrades);
-    paintHwNext();
-  }
-}
-function setTier(t) {
-  const band = t ? (t.score < 40 ? 0 : t.score < 75 ? 1 : 2) : -1;
-  $('tierName').textContent = t ? t.name : '–';
-  $('tierScore').textContent = t ? t.score : '–';
-  $('tierMk').style.left = (t ? t.score : 0) + '%';
-  $('tierMk').style.opacity = t ? 1 : 0;
-  document.querySelectorAll('#tier [data-b]').forEach(el => el.classList.toggle('on', +el.dataset.b === band));
-  $('tierBadge').textContent = t ? 'Measured' : 'Waiting'; $('tierBadge').className = 'badge ' + (t ? 'success' : 'neutral');
-  $('tierVerdict').textContent = t ? t.verdict : 'Run the analysis to see where your PC stands.';
-}
-function paintHwFindings(list) {
-  const sorted = [...list].sort((a, b) => sevRank[a.sev] - sevRank[b.sev]);
-  $('hwFind').innerHTML = sorted.length ? sorted.map(f => findHTML(f)).join('') : '<p class="body t-var">Nothing to fix on this PC.</p>';
-  const c = sorted.filter(f => f.sev === 'critical').length;
-  $('hwFindCount').textContent = `${sorted.length} found${c ? ` · ${c} bottleneck${c > 1 ? 's' : ''}` : ''}`;
-}
-function paintUpgrades(ups) { $('upW').hidden = !ups.length; $('upList').innerHTML = ups.map(upHTML).join(''); }
-function paintHwNext() {
-  $('hwNext').hidden = false; $('hwIntro').hidden = true; $('hwCont').hidden = false;
-  $('hwNextTxt').textContent = S.hw.tier.score >= 75 ? 'Your PC is ready. If games still lag, the route to the server is the next place to look.' : 'Lag also comes from the route to the game server. Test it next.';
-}
-async function runHardware() {
-  if (S.running) return;
-  S.running = 'hardware'; S.hw = null; markNav(); renderParts();
-  const P = PROFILES[S.profile];
-  $('hwFind').innerHTML = ''; $('hwStatus').textContent = 'Reading your PC…'; $('hwProg').hidden = false; $('hwAgain').hidden = true;
-  const prog = $('hwProg').firstElementChild; prog.style.width = '0%';
-  const found = [];
-  for (let i = 0; i < P.parts.length; i++) {
-    const p = P.parts[i], row = $('parts').querySelector(`.part[data-i="${i}"]`);
-    row.classList.add('reading'); row.querySelector('.st').innerHTML = '<span class="small t-var">Reading</span>';
-    $('hwStatus').textContent = `Reading ${p.lbl.toLowerCase()} · ${i + 1} of ${P.parts.length}`;
-    await wait(950 + Math.random() * 500);
-    row.classList.remove('reading'); row.classList.add('in');
-    row.querySelector('.val').textContent = p.val; row.querySelector('.sub').textContent = p.sub;
-    row.querySelector('.st').innerHTML = `<span class="badge ${p.st}">${p.stl}</span>`;
-    prog.style.width = ((i + 1) / P.parts.length * 100) + '%';
-    if (p.find) { found.push({ ...p.find, src: 'PC', part: p.lbl }); const d = document.createElement('div'); d.innerHTML = findHTML(p.find); const el = d.firstElementChild; el.classList.add('in'); $('hwFind').appendChild(el); $('hwFindCount').textContent = `${found.length} found`; }
-  }
-  $('hwStatus').textContent = 'Working out your machine type…';
-  await wait(700);
-  S.hw = hwResult(); S.running = null;
-  setTier(S.hw.tier); paintHwFindings(S.hw.findings);
-  await wait(500);
-  paintUpgrades(S.hw.upgrades); paintHwNext();
-  $('hwStatus').textContent = 'Done · just now'; $('hwAgain').hidden = false; $('hwProg').hidden = true; $('partsCount').textContent = `${P.parts.length} checked`;
-  markNav();
-}
-$('hwAgain').addEventListener('click', runHardware);
-
-/* ---------- Análise de rede ---------- */
-let gameSel = 0;
-function renderGames() {
-  $('games').innerHTML = GAMES.map((g, i) => `<button class="game" type="button" data-g="${i}" aria-pressed="${i === gameSel}"><span class="cv" style="background-image:url('${g.img}')"></span><span class="nm">${g.name}</span></button>`).join('');
-  $('games').querySelectorAll('.game').forEach(b => b.addEventListener('click', () => { gameSel = +b.dataset.g; S.region = null; renderGames(); }));
-  const g = GAMES[gameSel], best = nearest(g), reg = S.region && g.regions.includes(S.region) ? S.region : best;
-  S.region = reg;
-  $('servers').innerHTML = g.regions.map(r => `<button class="pill" type="button" data-r="${r}" aria-pressed="${r === reg}">${REGIONS[r][0]}${r === best ? ' <span class="t-var">· closest</span>' : ''}</button>`).join('');
-  $('servers').querySelectorAll('.pill').forEach(b => b.addEventListener('click', () => { S.region = b.dataset.r; renderGames(); }));
-}
-function showNetStage(s) {
-  $('netSetup').hidden = s !== 'setup'; $('netLive').hidden = s !== 'live'; $('netDone').hidden = s !== 'done';
-  $('netLiveBadge').hidden = s !== 'live';
-  if (s === 'setup') { renderGames(); $('routeLbl').textContent = ''; clearTags(); }
-}
-
-// Modelo da rota (simulado): a operadora desvia por um ponto de troca e perde pacotes nele; a ExitLag vai por 3 rotas
-// com bridges perto da linha reta até o servidor.
 function simulate(g, r) {
   const srv = [REGIONS[r][1], REGIONS[r][2], REGIONS[r][3], REGIONS[r][4]];
   const direct = Math.max(km(origin, srv), 1);
@@ -417,201 +231,270 @@ function netResult(m, sI, sX) {
   return { m, game: m.g, I, X, sI, sX, findings: F.map(f => ({ ...f, src: 'Network' })), extra };
 }
 
-let globe = null;
+/* ---------- Estado ---------- */
+const S = { scene: 'intro', profile: 'mid', hw: null, net: null, offer: null, loginMode: 'signup', running: false, game: 0, region: null, runId: 0 };
+try { const p = localStorage.getItem('xla-profile'); if (PROFILES[p]) S.profile = p; } catch { }
+const sevRank = { critical: 0, warning: 1, success: 2 };
+const sevLabel = { critical: 'Bottleneck', warning: 'Attention', success: 'Good' };
+function hwResult() {
+  const P = PROFILES[S.profile];
+  return { tier: P.tier, parts: P.parts, upgrades: P.upgrades, findings: P.parts.filter(p => p.find).map(p => ({ ...p.find, src: 'PC' })) };
+}
+$('originName').textContent = origin[2];
 
-/* rótulos sobre o globo (posição atualizada a cada quadro) */
+/* ---------- Cenas ---------- */
+function scene(name) {
+  S.scene = name; app.dataset.scene = name;
+  document.querySelectorAll('.scene').forEach(s => {
+    const on = s.id === 's-' + name;
+    if (on && !s.classList.contains('on')) { s.classList.remove('on'); void s.offsetWidth; }
+    s.classList.toggle('on', on);
+  });
+  document.querySelectorAll('[data-jump]').forEach(b => b.setAttribute('aria-pressed', b.dataset.jump === name));
+  if (!globe) return;
+  if (name === 'intro') { clearTags(); globe.idle(6.45); globe.setShift(300); }
+  if (name === 'login') { clearTags(); globe.idle(5.2); globe.setShift(0); }
+}
+
+/* ---------- Início: jogo e servidor que serão testados ---------- */
+function renderPicker() {
+  const g = GAMES[S.game], best = nearest(g);
+  if (!S.region || !g.regions.includes(S.region)) S.region = best;
+  $('gpCover').style.backgroundImage = `url('${g.img}')`;
+  $('gpName').textContent = `${g.name} · ${REGIONS[S.region][0]}`;
+  $('games').innerHTML = GAMES.map((x, i) => `<button type="button" data-g="${i}" aria-pressed="${i === S.game}" aria-label="${x.name}" title="${x.name}" style="background-image:url('${x.img}')"></button>`).join('');
+  $('servers').innerHTML = g.regions.map(r => `<button class="chip" type="button" data-r="${r}" aria-pressed="${r === S.region}">${REGIONS[r][0]}${r === best ? ' · closest' : ''}</button>`).join('');
+  $('games').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { S.game = +b.dataset.g; S.region = null; renderPicker(); }));
+  $('servers').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { S.region = b.dataset.r; renderPicker(); }));
+}
+const openPicker = o => { $('picker').classList.toggle('open', o); $('gamePick').setAttribute('aria-expanded', o); };
+$('gamePick').addEventListener('click', e => { e.stopPropagation(); openPicker(!$('picker').classList.contains('open')); });
+document.addEventListener('click', e => { if (!e.target.isConnected || $('picker').contains(e.target) || e.target.closest('#gamePick')) return; openPicker(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') openPicker(false); });
+$('start').addEventListener('click', () => { openPicker(false); runAll(); });
+
+/* ---------- Análise: uma sequência só, PC e depois conexão ---------- */
+let globe = null;
 let tags = [];
 function clearTags() { tags = []; $('gTags').innerHTML = ''; }
 function addTag(v, html, cls = '') { const el = document.createElement('span'); el.className = 'gtag ' + cls; el.innerHTML = html; $('gTags').appendChild(el); const t = { v, el }; tags.push(t); return t; }
-// globo carregado à parte: sem WebGL ou sem a CDN, as análises seguem funcionando, só sem o mapa
 import('./globe.js').then(({ createGlobe }) => {
   globe = createGlobe($('globe'), origin);
-  globe.onFrame = () => {
-    if (S.view !== 'network') return;
-    for (const t of tags) { const p = globe.screenOf(t.v); t.el.style.transform = `translate(${p.x}px, ${p.y}px)`; t.el.hidden = !p.visible || t.off; }
-  };
-  if (S.view === 'network' && S.net) renderNetDone(true);
-}).catch(e => { console.warn('Globe unavailable', e); app.classList.add('no-globe'); });
+  globe.setShift(300, 0, true);
+  globe.onFrame = () => { for (const t of tags) { const p = globe.screenOf(t.v); t.el.style.transform = `translate(${p.x}px, ${p.y}px)`; t.el.hidden = !p.visible || t.off; } };
+}).catch(e => console.warn('Globe unavailable', e));
 
-function drawChart(sI, sX, nI, nX) {
+const ticker = (l, v = '') => { const t = $('ticker'); $('tkL').textContent = l; $('tkV').textContent = v; t.classList.remove('swap'); void t.offsetWidth; t.classList.add('swap'); };
+const pbar = (id, f) => { $(id).querySelector('.bar i').style.width = (f * 100) + '%'; };
+const live = id => S.runId === id; // uma nova execução (ou um salto pelos chips) cancela a anterior
+
+// posição de cada peça em volta do anel: alternando esquerda e direita, em leve curva
+function nodePos(i, n) {
+  const side = i % 2 ? 1 : -1, k = Math.floor(i / 2), rows = Math.ceil(n / 2);
+  const y = 150 + k * ((810 - 150 - 170) / (rows - 1)), dy = (y + 34 - 405) / 250;
+  const x = side < 0 ? 170 + 110 * (1 - dy * dy) : 1440 - 170 - 220 - 110 * (1 - dy * dy);
+  return { x, y, side };
+}
+function countTo(el, to, ms = 900, dec = 0) {
+  const t0 = performance.now(), from = 0;
+  const f = now => { const k = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - k, 3); el.textContent = (from + (to - from) * e).toFixed(dec); if (k < 1) requestAnimationFrame(f); };
+  if (reduce) el.textContent = to.toFixed(dec); else requestAnimationFrame(f);
+}
+
+async function runAll() {
+  const id = ++S.runId;
+  S.running = true; S.hw = S.net = null;
+  app.classList.remove('net-on', 'xl-on');
+  ['ps1', 'ps2'].forEach(p => { $(p).classList.remove('on', 'done'); pbar(p, 0); });
+  $('finale').classList.remove('show');
+  $('core').classList.remove('done'); $('coreFill').style.strokeDashoffset = 936;
+  $('coreMid').innerHTML = `<span class="small t-var">Getting ready</span>`;
+  $('nodes').innerHTML = ''; $('wires').innerHTML = '';
+  scene('scan');
+  if (globe) { clearTags(); globe.idle(6.45); globe.setShift(0); }
+  await wait(900); if (!live(id)) return;
+
+  // 1 · PC: cada peça é lida no anel e sai voando para a sua posição
+  $('ps1').classList.add('on');
+  const P = PROFILES[S.profile], n = P.parts.length;
+  for (let i = 0; i < n; i++) {
+    const p = P.parts[i], pos = nodePos(i, n);
+    const ic = PART_ICON[p.k] === 'wifi' && !P.wifi ? 'cable' : PART_ICON[p.k];
+    $('coreMid').innerHTML = `<span class="ic pop">${icon(ic)}</span><span class="small t-var">Reading</span><b class="t-em">${p.lbl}</b>`;
+    ticker(`Reading ${p.lbl.toLowerCase()}`, '');
+    await wait(520); if (!live(id)) return;
+    $('tkV').textContent = p.val;
+    const node = document.createElement('div');
+    node.className = `node ${p.st}`; node.style.left = pos.x + 'px'; node.style.top = pos.y + 'px';
+    node.innerHTML = `<span class="lb"><span class="dot"></span>${p.lbl}</span><span class="v">${p.val}</span><span class="s">${p.st === 'success' ? p.sub : p.stl + ' · ' + p.sub}</span>`;
+    $('nodes').appendChild(node);
+    // fio do anel até a peça
+    const cx = 720, cy = 405, ex = pos.side < 0 ? pos.x + 220 : pos.x, ey = pos.y + 34, ang = Math.atan2(ey - cy, ex - cx), sx = cx + Math.cos(ang) * 160, sy = cy + Math.sin(ang) * 160;
+    $('wires').insertAdjacentHTML('beforeend', `<path class="${p.st}" d="M${sx.toFixed(0)} ${sy.toFixed(0)} C ${(sx + ex) / 2} ${sy}, ${(sx + ex) / 2} ${ey}, ${ex} ${ey}"/>`);
+    requestAnimationFrame(() => { node.classList.add('in'); $('wires').lastElementChild.classList.add('in'); });
+    $('coreFill').style.strokeDashoffset = 936 * (1 - (i + 1) / n);
+    pbar('ps1', (i + 1) / n);
+    await wait(560); if (!live(id)) return;
+  }
+  S.hw = hwResult();
+  $('core').classList.add('done');
+  $('coreMid').innerHTML = `<span class="score tnum" id="coreScore">0</span><span class="tier">${S.hw.tier.name}</span><span class="small t-var">${S.hw.findings.length} things to improve</span>`;
+  countTo($('coreScore'), S.hw.tier.score, 1100);
+  ticker('Your PC', `${S.hw.tier.name} · ${S.hw.tier.score} / 100`);
+  $('ps1').classList.add('done');
+  await wait(2200); if (!live(id)) return;
+
+  // 2 · Conexão: o anel some, o globo entra e a rota é medida duas vezes
+  $('ps2').classList.add('on');
+  const g = GAMES[S.game], m = simulate(g, S.region || nearest(g));
+  $('hwMini').innerHTML = `<span class="sc tnum">${S.hw.tier.score}</span><span><span class="small t-var">Your PC</span><br><b class="t-em">${S.hw.tier.name}</b></span>`;
+  $('routeLbl').innerHTML = `<span class="small t-var">${g.name} · ${REGIONS[m.r][0]} server</span><b>${origin[2]} → ${m.srv[2]}</b><span class="small t-var tnum">${fmt(m.direct)} km</span>`;
+  ['mPingI', 'mJitI', 'mLossI', 'mSpkI', 'mPingX', 'mJitX', 'mLossX', 'mSpkX'].forEach(k => $(k).textContent = '–');
+  $('pIsp').setAttribute('d', ''); $('pXl').setAttribute('d', '');
+  app.classList.add('net-on');
+  ticker('Locating you', origin[2]);
+  let R = null;
+  if (globe) { globe.setShift(220); R = globe.setRoute({ server: m.srv, ispVia: [m.hub], xl: m.xl.map(x => x.via) }); globe.scan(true);
+    addTag(globe.vO, `${origin[2]} <span class="t-var">You</span>`, 'below'); addTag(R.vS, `${m.srv[2]} <span class="t-var">Game server</span>`); }
+  await wait(1200); if (!live(id)) return;
+  globe && globe.showIsp(true);
+  ticker('Tracing your route to', `${m.srv[2]} · as it is today`);
+
+  const T1 = 10, T2 = 8, DT = 0.12, nI = Math.round(T1 / DT), nX = Math.round(T2 / DT);
+  const sI = [], sX = [], fI = sampler(m, 'isp'), fX = sampler(m, 'xl');
+  let badTag = null;
+  for (let i = 0; i < nI; i++) {
+    const t = i * DT; sI.push(fI(t));
+    if (t > 4 && !badTag) { globe && globe.ispFail(1, 1); if (R) badTag = addTag(R.isp.v[1], `${m.hub[2]} <b>packet loss</b>`, 'bad'); ticker('Packet loss found at', `${m.hub[2]} · your provider's exchange`); }
+    if (i % 3 === 0) { const st = stats(sI); $('mPingI').textContent = Math.round(st.avg); $('mJitI').textContent = st.jit.toFixed(1) + ' ms'; $('mLossI').textContent = st.loss.toFixed(1) + '%'; $('mLossI').classList.toggle('bad', st.loss > 0.4); $('mSpkI').textContent = st.spikes; drawLine(sI, sX, nI, nX); if (badTag) badTag.el.innerHTML = `${m.hub[2]} <b>${st.loss.toFixed(1)}% loss</b>`; }
+    pbar('ps2', (i + 1) / (nI + nX) * 0.95);
+    await wait(DT * 1000); if (!live(id)) return;
+  }
+  app.classList.add('xl-on');
+  if (globe) { globe.dimIsp(0.3); globe.ispFail(0.35, 1); globe.showXl(true); }
+  if (badTag) badTag.off = true;
+  if (R && R.xl[0].v.length > 2) addTag(R.xl[0].v[1], `Bridge <span class="t-var">${m.xl[0].bridge || ''}</span>`);
+  ticker('Same route through ExitLag', '3 routes carrying every packet');
+  for (let i = 0; i < nX; i++) {
+    const t = i * DT; sX.push(fX(t));
+    if (i % 3 === 0) { const st = stats(sX); $('mPingX').textContent = Math.round(st.avg); $('mJitX').textContent = st.jit.toFixed(1) + ' ms'; $('mLossX').textContent = st.loss.toFixed(1) + '%'; $('mSpkX').textContent = st.spikes; drawLine(sI, sX, nI, nX); }
+    pbar('ps2', (nI + i + 1) / (nI + nX) * 0.95 + 0.05 * (i + 1) / nX);
+    await wait(DT * 1000); if (!live(id)) return;
+  }
+  drawLine(sI, sX, nI, nX);
+  globe && globe.scan(false);
+  S.net = netResult(m, sI, sX);
+  $('ps2').classList.add('done');
+  ticker('Putting your results together', '');
+  await wait(600); if (!live(id)) return;
+  $('finale').classList.add('show');
+  await wait(1300); if (!live(id)) return;
+  S.running = false;
+  showResults();
+}
+function drawLine(sI, sX, nI, nX) {
   const all = [...sI, ...sX].filter(s => !s.lost).map(s => s.v), top = Math.max(60, Math.ceil(Math.max(...all, 1) * 1.15 / 20) * 20);
   $('axTop').textContent = top + ' ms';
-  const W = 372, H = 72, N = nI + nX, x = i => i / (N - 1) * W, y = v => H - v / top * (H - 8);
+  const W = 1248, H = 72, N = nI + nX, x = i => i / (N - 1) * W, y = v => H - v / top * (H - 4);
   const path = (arr, off) => { let d = '', pen = false; arr.forEach((s, i) => { if (s.lost) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i + off).toFixed(1) + ' ' + y(s.v).toFixed(1); pen = true; }); return d; };
   $('pIsp').setAttribute('d', path(sI, 0)); $('pXl').setAttribute('d', path(sX, nI));
 }
-const setK = (id, v, unit = '', dec = 0) => { $(id).innerHTML = (v == null ? '–' : v.toFixed(dec)) + (unit ? `<small>${unit}</small>` : ''); };
-function hopRow(n, h, ms, ls, bad) { return `<div class="hop in${bad ? ' bad' : ''}"><span class="n tnum">${n}</span><span class="h">${h}</span><span class="ms tnum">${ms}</span><span class="ls tnum">${ls}</span></div>`; }
 
-async function runNetwork() {
-  if (S.running) return;
-  const g = GAMES[gameSel], m = simulate(g, S.region || nearest(g));
-  S.running = 'network'; S.game = gameSel; markNav();
-  showNetStage('live');
-  ['kPingX', 'kJitX', 'kLossX', 'kSpkX'].forEach(id => $(id).hidden = true);
-  ['kPingI', 'kJitI', 'kLossI', 'kSpkI'].forEach(id => setK(id, null, id === 'kSpkI' ? '' : id === 'kLossI' ? '%' : 'ms'));
-  document.querySelectorAll('.phase').forEach(p => { p.classList.remove('on'); p.style.setProperty('--p', '0%'); });
-  $('pIsp').setAttribute('d', ''); $('pXl').setAttribute('d', '');
-  $('routeLbl').innerHTML = `${origin[3]} → ${m.srv[4] || m.srv[3]}<span class="t-var">${g.name} · ${REGIONS[m.r][0]} · ${fmt(m.direct)} km</span>`;
-  $('hopsTitle').textContent = 'Your route, hop by hop';
-  $('hops').innerHTML = '';
-  clearTags();
-  let R = null;
-  if (globe) { R = globe.setRoute({ server: m.srv, ispVia: [m.hub], xl: m.xl.map(x => x.via) }); globe.scan(true); }
-  if (R) { addTag(globe.vO, `${origin[2]} <span class="t-var">You</span>`, 'below'); addTag(R.vS, `${m.srv[2]} <span class="t-var">Game server</span>`); }
-  await wait(900);
-  if (globe) globe.showIsp(true);
-
-  // fase 1: conexão atual
-  const ph = k => document.querySelector(`.phase[data-ph="${k}"]`);
-  ph(0).classList.add('on');
-  const T1 = 10, T2 = 8, DT = 0.12, nI = Math.round(T1 / DT), nX = Math.round(T2 / DT);
-  const sI = [], sX = [], fI = sampler(m, 'isp'), fX = sampler(m, 'xl');
-  const hubMs = Math.round(12 + km(origin, m.hub) / 100 * 1.15);
-  const hopsI = [
-    [1, `Your router · ${PROFILES[S.profile].wifi ? 'Wi-Fi' : 'cable'}`, PROFILES[S.profile].wifi ? 3 : 1],
-    [2, `Provider gateway · ${origin[2]}`, 7], [3, `Provider backbone · ${origin[2]}`, 11],
-    [4, `Exchange · ${m.hub[2]}`, hubMs, true], [5, `Transit · ${m.hub[2]}`, hubMs + 3], [6, `Game server · ${m.srv[2]}`, m.ispBase]
-  ];
-  let badTag = null, hopShown = 0;
-  for (let i = 0; i < nI; i++) {
-    const t = i * DT, s = fI(t); sI.push(s);
-    // saltos aparecem ao longo da fase, como num traceroute
-    while (hopShown < hopsI.length && t >= hopShown * 1.3) { const h = hopsI[hopShown]; $('hops').insertAdjacentHTML('beforeend', hopRow(h[0], h[1], h[2] + ' ms', '–', false)); hopShown++; }
-    if (t > 4 && !badTag) {
-      // perda aparece no ponto de troca: a rota pisca em vermelho só ali
-      if (globe) globe.ispFail(1, 1);
-      if (R) badTag = addTag(R.isp.v[1], `${m.hub[2]} <b>packet loss</b>`, 'bad');
-      const row = $('hops').children[3]; if (row) { row.classList.add('bad'); }
-    }
-    if (badTag) { const st = stats(sI); const row = $('hops').children[3]; if (row) row.querySelector('.ls').textContent = st.loss.toFixed(1) + '%'; badTag.el.innerHTML = `${m.hub[2]} <b>${st.loss.toFixed(1)}% loss</b>`; }
-    if (i % 3 === 0) { const st = stats(sI); setK('kPingI', st.avg, 'ms'); setK('kJitI', st.jit, 'ms', 1); setK('kLossI', st.loss, '%', 1); setK('kSpkI', st.spikes); drawChart(sI, sX, nI, nX); }
-    ph(0).style.setProperty('--p', ((i + 1) / nI * 100) + '%');
-    await wait(DT * 1000);
-  }
-  const hops = $('hops'); [...hops.children].forEach((r, k) => { if (k === 5) r.querySelector('.ls').textContent = stats(sI).loss.toFixed(1) + '%'; else if (k !== 3) r.querySelector('.ls').textContent = '0%'; });
-
-  // fase 2: com ExitLag
-  ph(1).classList.add('on');
-  if (globe) { globe.dimIsp(0.3); globe.ispFail(0.35, 1); globe.showXl(true); }
-  if (badTag) badTag.off = true;
-  ['kPingX', 'kJitX', 'kLossX', 'kSpkX'].forEach(id => $(id).hidden = false);
-  $('hopsTitle').textContent = 'ExitLag route 1 of 3';
-  const x0 = m.xl[0];
-  const hopsX = [[1, `Your router · ${PROFILES[S.profile].wifi ? 'Wi-Fi' : 'cable'}`, PROFILES[S.profile].wifi ? 3 : 1], [2, `ExitLag bridge · ${x0.bridge || origin[2]}`, Math.round(m.xlBase * 0.3)],
-    [3, 'ExitLag tunnel', Math.round(m.xlBase * 0.7)], [4, `ExitLag final · ${x0.final}`, Math.round(m.xlBase * 0.9)], [5, `Game server · ${m.srv[2]}`, m.xlBase]];
-  $('hops').innerHTML = '';
-  if (R && globe) { const n = R.xl[0].v; if (n.length > 2) addTag(n[1], `Bridge <span class="t-var">${x0.bridge || ''}</span>`); }
-  hopShown = 0;
-  for (let i = 0; i < nX; i++) {
-    const t = i * DT, s = fX(t); sX.push(s);
-    while (hopShown < hopsX.length && t >= 0.8 + hopShown * 1.1) { const h = hopsX[hopShown]; $('hops').insertAdjacentHTML('beforeend', hopRow(h[0], h[1], h[2] + ' ms', '0%', false)); hopShown++; }
-    if (hopShown === hopsX.length && !$('hops').querySelector('.more')) $('hops').insertAdjacentHTML('beforeend', `<div class="hop in more"><span></span><span class="h t-var">+ 2 more routes in parallel</span><span></span><span></span></div>`);
-    if (i % 3 === 0) { const st = stats(sX); setK('kPingX', st.avg, 'ms'); setK('kJitX', st.jit, 'ms', 1); setK('kLossX', st.loss, '%', 1); setK('kSpkX', st.spikes); drawChart(sI, sX, nI, nX); }
-    ph(1).style.setProperty('--p', ((i + 1) / nX * 100) + '%');
-    await wait(DT * 1000);
-  }
-  drawChart(sI, sX, nI, nX);
-  ph(2).classList.add('on'); ph(2).style.setProperty('--p', '100%');
-  await wait(900);
-  if (globe) globe.scan(false);
-  S.net = netResult(m, sI, sX); S.running = null; markNav();
-  renderNetDone(false);
-  if (S.hw) $('hwNext').hidden = true;
-}
-function renderNetDone(rebuild) {
-  const N = S.net, I = N.I, X = N.X;
-  showNetStage('done');
-  $('routeLbl').innerHTML = `${origin[3]} → ${N.m.srv[4] || N.m.srv[3]}<span class="t-var">${N.game.name} · ${REGIONS[N.m.r][0]} · ${fmt(N.m.direct)} km</span>`;
-  const pct = (a, b) => a > 0 ? `${Math.round((1 - b / a) * 100)}% lower` : '';
-  const rows = [
-    ['Average ping', `${Math.round(I.avg)} ms`, `${Math.round(X.avg)} ms`, pct(I.avg, X.avg)],
-    ['Jitter', `${I.jit.toFixed(1)} ms`, `${X.jit.toFixed(1)} ms`, pct(I.jit, X.jit)],
-    ['Packet loss', `${I.loss.toFixed(1)}%`, `${X.loss.toFixed(1)}%`, X.loss < I.loss ? 'Gone' : ''],
-    ['Lag spikes', `${I.spikes}`, `${X.spikes}`, X.spikes < I.spikes ? `${I.spikes - X.spikes} fewer` : ''],
-    ['Stability', `${I.score} / 100`, `${X.score} / 100`, `+${X.score - I.score}`]
-  ];
-  $('cmpBody').innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td class="tnum">${r[1]}</td><td class="tnum">${r[2]}</td><td class="gain tnum">${r[3]}</td></tr>`).join('');
-  $('netFind').innerHTML = N.findings.map(f => findHTML(f)).join('') || '<p class="body t-var">No problems found on this route.</p>';
-  $('netFindCount').textContent = `${N.findings.length} found`;
-  // globo no estado final: as duas rotas visíveis, a da operadora apagada com o ponto de perda marcado
-  if (globe && rebuild && S.view === 'network') {
-    const R = globe.setRoute({ server: N.m.srv, ispVia: [N.m.hub], xl: N.m.xl.map(x => x.via) });
-    globe.showIsp(true); globe.showXl(true); globe.dimIsp(0.3); globe.ispFail(0.35, 1);
-    clearTags(); addTag(globe.vO, `${origin[2]} <span class="t-var">You</span>`, 'below'); addTag(R.vS, `${N.m.srv[2]} <span class="t-var">Game server</span>`);
-    addTag(R.isp.v[1], `${N.m.hub[2]} <b>${I.loss.toFixed(1)}% loss</b>`, 'bad');
-  }
-}
-$('netRun').addEventListener('click', runNetwork);
-$('netAgain').addEventListener('click', () => { S.net = null; markNav(); showNetStage('setup'); globe && globe.idle(); });
-
-/* ---------- Relatório ---------- */
-const ring = (v, label) => { const c = 2 * Math.PI * 38, off = c * (1 - v / 100); return `<div class="ring"><svg viewBox="0 0 88 88"><circle class="bg" cx="44" cy="44" r="38"/><circle class="fg" cx="44" cy="44" r="38" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${c.toFixed(1)}" data-off="${off.toFixed(1)}"/></svg><span class="val tnum">${label}</span></div>`; };
-function renderReport() {
-  const H = S.hw, N = S.net;
-  $('rpEmpty').hidden = !!(H || N); $('rpBody').hidden = !(H || N);
-  $('rpWhen').textContent = H || N ? `${[H && 'PC', N && 'Network'].filter(Boolean).join(' and ')} analyzed today` : '';
-  if (!H && !N) return;
-  const findings = [...(H ? H.findings : []), ...(N ? N.findings : [])].sort((a, b) => sevRank[a.sev] - sevRank[b.sev] || (a.src === 'Network' ? -1 : 1));
-  const crit = findings.filter(f => f.sev === 'critical').length;
-  const fixable = findings.filter(f => (f.fix || []).some(x => typeof x === 'string')).length;
-  const card = (title, body) => `<div class="widget"><div class="score-card">${body}</div></div>`;
-  $('rpTop').innerHTML = [
-    H ? card('', `${ring(H.tier.score, H.tier.score)}<div class="txt"><span class="small t-var">Your PC</span><b class="h2">${H.tier.name}</b><span class="small t-var">${H.findings.length} things to improve</span></div>`)
-      : card('', `<div class="txt"><span class="small t-var">Your PC</span><b class="h3">Not analyzed yet</b><button class="btn outlined" type="button" data-go="hardware" style="align-self:flex-start;margin-top:8px">Run hardware analysis</button></div>`),
-    N ? card('', `${ring(N.I.score, N.I.score)}<div class="txt"><span class="small t-var">Connection stability · ${N.game.name}</span><b class="h2">${N.I.score < 50 ? 'Unstable' : N.I.score < 75 ? 'Shaky' : 'Steady'}</b><span class="small t-var">With ExitLag: ${N.X.score} / 100 · ${Math.round(N.I.avg)} → ${Math.round(N.X.avg)} ms</span></div>`)
-      : card('', `<div class="txt"><span class="small t-var">Your connection</span><b class="h3">Not tested yet</b><button class="btn outlined" type="button" data-go="network" style="align-self:flex-start;margin-top:8px">Run network analysis</button></div>`),
-    card('', `<div class="txt"><span class="small t-var">Problems found</span><b class="h2 tnum">${findings.length}</b><span class="small t-var">${crit} bottleneck${crit === 1 ? '' : 's'} · ${fixable} fixable with ExitLag</span></div>`)
-  ].join('');
-  requestAnimationFrame(() => requestAnimationFrame(() => document.querySelectorAll('#rpTop .fg').forEach(c => c.style.strokeDashoffset = c.dataset.off)));
-  $('rpFind').innerHTML = findings.map(f => findHTML(f, f.src)).join('');
-  // ferramentas que resolvem o que foi encontrado, com o efeito esperado em números quando há medida
-  const count = {}; findings.forEach(f => (f.fix || []).forEach(x => { if (typeof x === 'string') count[x] = (count[x] || 0) + 1; }));
-  const effect = {
-    route: N ? `Ping ${Math.round(N.I.avg)} → ${Math.round(N.X.avg)} ms, loss ${N.I.loss.toFixed(1)}% → ${N.X.loss.toFixed(1)}% (measured)` : TOOLS.route.pitch,
-    fps: H ? `Closes ${((H.parts.find(p => p.k === 'bg') || {}).val || '').match(/(\d+) start/)?.[1] || 'the'} startup apps and sets a performance power plan` : TOOLS.fps.pitch,
-    ram: H ? `Frees memory held by idle apps · ${((H.parts.find(p => p.k === 'ram') || {}).sub || '').match(/\d+%/)?.[0] || ''} in use now` : TOOLS.ram.pitch,
-    dns: H ? `Lookups ${(H.parts.find(p => p.k === 'dns') || {}).sub?.split(' ')[0] || '30'} → about 10 ms (estimated)` : TOOLS.dns.pitch,
-    multi: 'Keeps the match alive if your Wi-Fi drops'
-  };
-  const order = Object.keys(count).sort((a, b) => count[b] - count[a]);
-  $('rpFix').innerHTML = order.map(k => `<div class="fix-row"><span class="ic">${icon(TOOLS[k].icon)}</span><span class="txt"><b>${TOOLS[k].name}</b><span class="small t-var">${effect[k]}</span></span><span class="badge neutral tnum">${count[k]} fix${count[k] > 1 ? 'es' : ''}</span></div>`).join('')
-    || '<p class="body t-var">Nothing here needs ExitLag.</p>';
-  const ups = H ? H.upgrades : [];
-  $('rpUp').hidden = !ups.length; $('rpUpList').innerHTML = ups.map(upHTML).join('');
-}
-
-/* ---------- Plano (CTA) ---------- */
+/* ---------- Resultados e oferta ---------- */
 const PLANS = [{ id: 'm', n: 'Monthly', p: 6.49, sub: 'Billed every month' }, { id: 'q', n: 'Quarterly', p: 5.66, sub: '$16.99 every 3 months' }, { id: 'y', n: 'Yearly', p: 4.99, sub: '$59.88 per year', best: true }];
-let pick = 'trial';
-function renderPlan() {
-  const all = [...(S.hw ? S.hw.findings : []), ...(S.net ? S.net.findings : [])];
+let pick = 'trial', io = null;
+const tagHTML = f => (f.fix || []).map(x => typeof x === 'string' ? `<span class="tag">${icon(TOOLS[x].icon, 'xs')}${TOOLS[x].name}</span>` : `<span class="tag free">${x.free}</span>`).join('');
+const probHTML = f => `<div class="prob rs"><span class="sev ${f.sev}"></span><div class="txt"><div class="t"><b>${f.t}</b><span class="badge ${f.sev}">${sevLabel[f.sev]}</span></div><p class="d">${f.d}</p><div class="fx">${tagHTML(f)}</div></div></div>`;
+
+function showResults() {
+  const H = S.hw, N = S.net, I = N.I, X = N.X;
+  const all = [...N.findings, ...H.findings].sort((a, b) => sevRank[a.sev] - sevRank[b.sev]);
+  const fixable = all.filter(f => (f.fix || []).some(x => typeof x === 'string')).length;
+  const crit = all.filter(f => f.sev === 'critical').length;
+  const netCrit = N.findings.some(f => f.sev === 'critical'), hwCrit = H.findings.some(f => f.sev === 'critical');
+  const head = H.tier.score >= 75 ? 'Your PC is ready. Your connection isn\'t.' : netCrit && hwCrit ? 'Your PC and your connection are both holding you back.' : netCrit ? 'Your connection is what\'s costing you.' : 'Your PC is what\'s holding you back.';
   const count = {}; all.forEach(f => (f.fix || []).forEach(x => { if (typeof x === 'string') count[x] = (count[x] || 0) + 1; }));
-  const n = all.filter(f => (f.fix || []).some(x => typeof x === 'string')).length;
-  $('plHead').textContent = n ? `Fix ${n} of the ${all.length} problems we found.` : 'Play without lag.';
-  $('plDesc').textContent = S.net ? `Starting with your route to ${S.net.m.srv[2]}: ${Math.round(S.net.I.avg)} → ${Math.round(S.net.X.avg)} ms and no packet loss, as measured a minute ago. Every tool below is in every plan.` : 'Every tool below is included in every plan.';
-  $('plEyebrow').textContent = S.focusTool ? `${TOOLS[S.focusTool].name} is included in every plan` : 'Based on your results';
-  const order = Object.keys(TOOLS).sort((a, b) => (count[b] || 0) - (count[a] || 0));
-  $('plFixes').innerHTML = order.map(k => `<div class="pl-fix${count[k] ? '' : ' dim'}"><span class="ic">${icon(TOOLS[k].icon)}</span><span class="txt"><b>${TOOLS[k].name}${count[k] ? `<span class="badge neutral tnum">${count[k]} fix${count[k] > 1 ? 'es' : ''}</span>` : ''}</b><span class="small t-var">${TOOLS[k].pitch}</span></span></div>`).join('');
-  $('plans').innerHTML = PLANS.map(p => `<button class="plan" type="button" data-plan="${p.id}" aria-pressed="${p.id === pick}"><span class="nm"><span class="t-em">${p.n}</span><span class="small t-var">${p.sub}</span></span>${p.best ? '<span class="badge success">Best value</span>' : ''}<span class="pr"><b class="tnum">$${p.p}</b><span class="small t-var">/mo</span></span></button>`).join('');
-  $('plans').querySelectorAll('.plan').forEach(b => b.addEventListener('click', () => setPick(b.dataset.plan)));
+  const pct = (a, b) => a > 0 ? Math.round((1 - b / a) * 100) : 0;
+  const rows = [
+    ['Average ping', I.avg, X.avg, v => `${Math.round(v)} ms`, `−${pct(I.avg, X.avg)}%`],
+    ['Jitter', I.jit, X.jit, v => `${v.toFixed(1)} ms`, `−${pct(I.jit, X.jit)}%`],
+    ['Packet loss', I.loss, X.loss, v => `${v.toFixed(1)}%`, X.loss < 0.05 ? 'Gone' : `−${pct(I.loss, X.loss)}%`],
+    ['Lag spikes', I.spikes, X.spikes, v => `${v}`, X.spikes === 0 ? 'None' : `${I.spikes - X.spikes} fewer`]
+  ];
+  const ups = H.upgrades;
+  $('res').innerHTML = `
+    <div class="res-hero">
+      <span class="eyebrow rs">Your results · ${N.game.name} · ${origin[2]} → ${N.m.srv[2]}</span>
+      <h1 class="rs" id="resTitle">${head}</h1>
+      <p class="body-lg rs">We found ${all.length} problems. ExitLag fixes ${fixable} of them, starting with ${all[0] ? all[0].t.charAt(0).toLowerCase() + all[0].t.slice(1) : 'your route'}.</p>
+    </div>
+    <div class="stats">
+      <div class="stat rs"><span class="k">Your PC</span><span class="n"><span class="tnum" data-count="${H.tier.score}">0</span><small>/ 100</small></span><span class="sub"><b class="t-em" style="color:var(--on-surface)">${H.tier.name}.</b> ${H.tier.verdict}</span><span class="meter-bar"><i data-w="${H.tier.score}"></i></span></div>
+      <div class="stat rs"><span class="k">Ping to ${N.m.srv[2]}</span><span class="n"><span class="tnum" data-count="${Math.round(I.avg)}">0</span><span class="arrow">→</span><span class="tnum" data-count="${Math.round(X.avg)}">0</span><small>ms</small></span><span class="sub">Measured on your route, first as it is today and then through ExitLag. Stability ${I.score} → ${X.score} out of 100.</span><span class="meter-bar"><i data-w="${X.score}"></i></span></div>
+      <div class="stat rs"><span class="k">Problems found</span><span class="n"><span class="tnum" data-count="${all.length}">0</span></span><span class="sub">${crit} bottleneck${crit === 1 ? '' : 's'}. ExitLag fixes ${fixable}; the others have a free fix or need new hardware.</span><span class="meter-bar"><i data-w="${Math.round(fixable / Math.max(all.length, 1) * 100)}"></i></span></div>
+    </div>
+    <div class="sec">
+      <div class="sec-h rs"><h2>Same route, before and after.</h2><span class="small t-var">Measured a minute ago · ${fmt(N.m.direct)} km</span></div>
+      <div class="ba rs">
+        <span class="hd">Measured</span><span class="legend small t-var"><span><span class="dot isp"></span>Your connection</span><span><span class="dot xl"></span>Through ExitLag</span></span><span class="hd" style="text-align:right">Change</span>
+        ${rows.map(([nm, a, b, f, gain]) => { const mx = Math.max(a, b, 0.0001); return `<span class="m">${nm}</span><span class="bars"><span class="b isp"><i data-w="${Math.max(a / mx * 100, 1)}"></i><span class="tnum">${f(a)}</span></span><span class="b xl"><i data-w="${Math.max(b / mx * 100, 1)}"></i><span class="tnum">${f(b)}</span></span></span><span class="g tnum">${gain}</span>`; }).join('')}
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-h rs"><h2>What's holding you back.</h2><span class="small t-var">Most impact first</span></div>
+      <div class="probs">
+        <div class="pcol"><div class="hd rs">${icon('net', 'sm')}<b>Your connection</b><span class="small t-var">${N.findings.length} found</span></div>${N.findings.sort((a, b) => sevRank[a.sev] - sevRank[b.sev]).map(probHTML).join('')}</div>
+        <div class="pcol"><div class="hd rs">${icon('pc', 'sm')}<b>Your PC</b><span class="small t-var">${H.findings.length} found</span></div>${[...H.findings].sort((a, b) => sevRank[a.sev] - sevRank[b.sev]).map(probHTML).join('')}</div>
+      </div>
+    </div>
+    ${ups.length ? `<div class="sec"><div class="sec-h rs"><h2>One upgrade worth making.</h2><span class="badge neutral">Partner offer</span></div>
+      ${ups.map(u => `<div class="upg rs"><div class="art">${icon(u.icon)}</div><div class="txt"><span class="small t-var">${u.part}</span><b class="t-em" style="font-size:18px;line-height:24px">${u.name}</b><span class="body t-var">${u.why} ${u.gain}.</span></div><div class="pr"><b class="tnum">$${u.price}</b><s class="tnum">$${u.was}</s><button class="btn outlined" type="button" data-offer="${u.name}">See offer</button></div></div>`).join('')}
+      <p class="small t-var rs">Optimization can't make up for a part this old. We picked the best price we found today at our partner store.</p></div>` : ''}
+    <div class="offer-sec rs" id="offer">
+      <div class="offer-l">
+        <span class="eyebrow">ExitLag</span>
+        <h2>Fix ${fixable} of the ${all.length} problems we found.</h2>
+        <p class="body-lg">Start with your route to ${N.m.srv[2]}: ${Math.round(I.avg)} → ${Math.round(X.avg)} ms and no packet loss, as measured a minute ago. Every tool is in every plan.</p>
+        <div class="tools">${Object.keys(TOOLS).sort((a, b) => (count[b] || 0) - (count[a] || 0)).map(k => `<div class="tool${count[k] ? '' : ' dim'}"><span class="ic">${icon(TOOLS[k].icon, 'sm')}</span><span class="txt"><b>${TOOLS[k].name}${count[k] ? `<span class="badge neutral tnum">${count[k]} fix${count[k] > 1 ? 'es' : ''}</span>` : ''}</b><span class="small t-var">${TOOLS[k].pitch}</span></span></div>`).join('')}</div>
+      </div>
+      <div class="offer-r">
+        <button class="offer" type="button" data-pick="trial"><span class="top"><b>3-day free trial</b><span class="badge success">Start here</span></span><span class="small t-var">Every tool, no charge for 3 days. Pick a plan when it ends.</span></button>
+        ${PLANS.map(p => `<button class="plan" type="button" data-pick="${p.id}"><span class="nm"><span class="t-em">${p.n}</span><span class="small t-var">${p.sub}</span></span>${p.best ? '<span class="badge success">Best value</span>' : ''}<span class="pr"><b class="tnum">$${p.p}</b><span class="small t-var">/mo</span></span></button>`).join('')}
+        <button class="btn filled lg block" type="button" id="offerGo">Start free trial</button>
+        <p class="small t-var">Prototype: example prices. You'll create your account next.</p>
+      </div>
+    </div>`;
+  $('dockTxt').innerHTML = `ExitLag fixes <b>${fixable} of the ${all.length}</b> problems we found.`;
+  $('res').querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => setPick(b.dataset.pick)));
+  $('offerGo').addEventListener('click', () => { S.offer = pick; S.loginMode = 'signup'; renderLogin(); scene('login'); });
   setPick(pick);
+  $('s-results').scrollTop = 0;
+  app.classList.remove('net-on', 'xl-on'); clearTags(); if (globe) { globe.scan(false); globe.idle(6.45); }
+  scene('results');
+  // revela cada bloco quando entra na tela: sobe, conta os números e enche as barras
+  const reveal = el => { if (el.classList.contains('seen')) return; el.classList.add('seen'); el.querySelectorAll('[data-count]').forEach(c => countTo(c, +c.dataset.count, 1200)); el.querySelectorAll('[data-w]').forEach(b => b.style.width = b.dataset.w + '%'); };
+  if (io) io.disconnect();
+  const items = [...$('res').querySelectorAll('.rs')];
+  items.forEach((el, k) => el.style.transitionDelay = (k < 6 ? k * 90 : 0) + 'ms');
+  if ('IntersectionObserver' in window) {
+    io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { reveal(e.target); if (e.target.id !== 'offer') io.unobserve(e.target); } if (e.target.id === 'offer') $('dock').classList.toggle('hide', e.isIntersecting); }), { root: $('s-results'), threshold: 0.15 });
+    items.forEach(el => io.observe(el));
+  } else items.forEach(reveal);
 }
 function setPick(id) {
   pick = id;
-  $('offTrial').setAttribute('aria-pressed', id === 'trial');
-  $('plans').querySelectorAll('.plan').forEach(x => x.setAttribute('aria-pressed', x.dataset.plan === id));
+  $('res').querySelectorAll('[data-pick]').forEach(b => b.setAttribute('aria-pressed', b.dataset.pick === id));
   const p = PLANS.find(x => x.id === id);
-  $('plGo').textContent = p ? `Subscribe · $${p.p}/mo` : 'Start free trial';
+  if ($('offerGo')) $('offerGo').textContent = p ? `Subscribe · $${p.p}/mo` : 'Start free trial';
 }
-$('offTrial').addEventListener('click', () => setPick('trial'));
-$('plGo').addEventListener('click', () => { S.offer = pick; S.loginMode = 'signup'; go('login'); });
+$('dockGo').addEventListener('click', () => { const s = $('s-results'), o = $('offer'); s.scrollTo({ top: o.offsetTop - (s.clientHeight - o.offsetHeight) / 2, behavior: reduce ? 'auto' : 'smooth' }); });
+document.addEventListener('click', e => { const o = e.target.closest('[data-offer]'); if (o) toast('Opens the partner store', `${o.dataset.offer}, at the best price found today. Link not active in the prototype.`); });
 
 /* ---------- Login: fim do fluxo ---------- */
 function renderLogin() {
   const p = PLANS.find(x => x.id === S.offer), signup = S.loginMode !== 'login';
-  $('lgForm').hidden = false; $('lgDone').hidden = true; document.querySelector('.lg-head').hidden = false; $('lgErr').textContent = '';
-  $('lgPlan').hidden = S.offer === 'login';
+  $('lgForm').hidden = false; $('lgDone').hidden = true; $('lgHead').hidden = false; $('lgErr').textContent = '';
+  $('lgPlan').hidden = !S.offer;
   $('lgPlan').textContent = p ? `${p.n} plan · $${p.p}/mo` : '3-day free trial';
   $('lgTitle').textContent = signup ? 'Create your account' : 'Log in to ExitLag';
   $('lgDesc').textContent = signup ? 'Your results come with you, so ExitLag can start fixing them right away.' : 'Your results from this check-up come with you.';
@@ -622,10 +505,9 @@ function renderLogin() {
 }
 $('lgSwitch').addEventListener('click', () => { S.loginMode = S.loginMode === 'login' ? 'signup' : 'login'; renderLogin(); });
 function finishLogin(how) {
-  $('lgForm').hidden = true; document.querySelector('.lg-head').hidden = true; const d = $('lgDone'); d.hidden = false; d.classList.remove('in'); void d.offsetWidth; d.classList.add('in');
+  $('lgForm').hidden = true; $('lgHead').hidden = true; const d = $('lgDone'); d.hidden = false; d.classList.remove('in'); void d.offsetWidth; d.classList.add('in');
   const p = PLANS.find(x => x.id === S.offer);
-  $('lgDoneTxt').textContent = `${how}${p ? ` ${p.n} plan active.` : S.offer === 'trial' ? ' Your 3-day free trial is on.' : ''} This is where the prototype ends: in the app, ExitLag opens and applies the fixes from your results.`;
-  markNav();
+  $('lgDoneTxt').textContent = `${how}${p ? ` ${p.n} plan active.` : ' Your 3-day free trial is on.'} This is where the prototype ends: in the app, ExitLag opens and applies the fixes from your results.`;
 }
 $('lgForm').addEventListener('submit', e => {
   e.preventDefault();
@@ -637,33 +519,39 @@ $('lgForm').addEventListener('submit', e => {
   finishLogin(S.loginMode === 'login' ? 'Logged in.' : 'Account created.');
 });
 $('lgGoogle').addEventListener('click', () => finishLogin('Signed in with Google.'));
-$('lgRestart').addEventListener('click', () => { S.hw = S.net = S.offer = null; S.seen = false; S.focusTool = null; pick = 'trial'; $('lgEmail').value = $('lgPass').value = ''; showNetStage('setup'); $('hwIntro').hidden = false; go('hardware'); });
+$('lgRestart').addEventListener('click', () => { S.runId++; S.running = false; S.hw = S.net = S.offer = null; pick = 'trial'; $('lgEmail').value = $('lgPass').value = ''; scene('intro'); });
 
-// ferramenta travada: explica o que faz e, depois dos resultados, leva ao plano
-function toolAction(id) {
-  if (reachable('plan')) { S.focusTool = id; go('plan'); return; }
-  toast(`${TOOLS[id].name} is part of ExitLag`, `${TOOLS[id].pitch} Finish the check-up to unlock it.`);
+/* ---------- Chips do protótipo ---------- */
+function fill() { if (!S.hw) S.hw = hwResult(); if (!S.net) S.net = netResult(simulate(GAMES[S.game], S.region || nearest(GAMES[S.game]))); }
+function jump(name) {
+  S.runId++; S.running = false; $('finale').classList.remove('show');
+  if (name === 'intro') { app.classList.remove('net-on', 'xl-on'); scene('intro'); return; }
+  if (name === 'scan') { runAll(); return; }
+  fill();
+  if (name === 'results') { app.classList.remove('net-on', 'xl-on'); globe && globe.scan(false); showResults(); return; }
+  if (name === 'login') { app.classList.remove('net-on', 'xl-on'); if (!S.offer) S.offer = pick; S.loginMode = 'signup'; renderLogin(); scene('login'); }
 }
+document.querySelectorAll('[data-jump]').forEach(b => b.addEventListener('click', () => jump(b.dataset.jump)));
+document.querySelectorAll('[data-profile]').forEach(b => b.addEventListener('click', () => {
+  S.profile = b.dataset.profile; try { localStorage.setItem('xla-profile', S.profile); } catch { }
+  document.querySelectorAll('[data-profile]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  if (S.scene === 'scan' && S.running) { runAll(); return; }
+  if (S.hw) S.hw = hwResult();
+  if (S.net) S.net = netResult(simulate(GAMES[S.game], S.region || nearest(GAMES[S.game])));
+  if (S.scene === 'results') showResults();
+  toast('Simulated PC changed', PROFILES[S.profile].tier.name);
+}));
+document.querySelectorAll('[data-profile]').forEach(x => x.setAttribute('aria-pressed', x.dataset.profile === S.profile));
 
-/* ---------- Snackbar e tooltip ---------- */
+/* ---------- Snackbar ---------- */
 let snackT = 0;
 function toast(t, d) {
   const s = $('snack'); $('snackT').textContent = t; $('snackD').textContent = d || '';
   s.hidden = false; requestAnimationFrame(() => s.classList.add('show'));
-  const bar = $('snackBar'); bar.style.transition = 'none'; bar.style.transform = 'scaleX(1)';
-  requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transition = 'transform 4000ms linear'; bar.style.transform = 'scaleX(0)'; }));
-  clearTimeout(snackT); snackT = setTimeout(() => { s.classList.remove('show'); setTimeout(() => s.hidden = true, 250); }, 4000);
+  clearTimeout(snackT); snackT = setTimeout(() => { s.classList.remove('show'); setTimeout(() => s.hidden = true, 300); }, 3600);
 }
-const tip = $('tip');
-document.addEventListener('pointerover', e => {
-  const el = e.target.closest('[data-tip]'); if (!el) { tip.classList.remove('show'); return; }
-  tip.textContent = el.dataset.tip;
-  const r = el.getBoundingClientRect(), a = app.getBoundingClientRect(), sc = a.width / app.offsetWidth;
-  tip.style.left = Math.min((r.left - a.left) / sc, 1440 - 270) + 'px'; tip.style.top = ((r.bottom - a.top) / sc + 8) + 'px';
-  tip.classList.add('show');
-});
 
 /* ---------- Início ---------- */
-markNav(); renderParts(); renderGames();
+renderPicker();
 const h = location.hash.slice(1);
-if (TITLES[h]) jump(h); else go('hardware');
+if (['scan', 'results', 'login'].includes(h)) jump(h); else scene('intro');

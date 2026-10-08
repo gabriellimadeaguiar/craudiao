@@ -190,6 +190,8 @@ export function createGlobe(canvas, origin) {
   const vO = toV(origin[0], origin[1]);
   const cur = { yaw: 0, pitch: 0, dist: 7.5 }, want = { yaw: 0, pitch: 0, dist: 6.45 };
   let mode = 'idle', time = 0, last = performance.now(), vw = 1, vh = 1, offX = 0, offY = 0;
+  // deslocamento do globo na tela (px): a câmera desliza junto com a troca de cena, sem redimensionar o canvas
+  const shift = { x: 0, y: 0, tx: 0, ty: 0 };
   let R = null; // rotas montadas: { isp, xl[], ispStops, xlNodes, show: {isp, xl}, fail }
   const show = { isp: 0, xl: 0 }, target = { isp: 0, xl: 0 };
   let scanOn = false, scanY = 1;
@@ -206,7 +208,8 @@ export function createGlobe(canvas, origin) {
   new ResizeObserver(resize).observe(canvas);
 
   /* ---------- API ---------- */
-  function idle() { mode = 'idle'; target.isp = target.xl = 0; want.dist = 6.45; centerOn(oLat, oLon); }
+  function idle(dist = 6.45) { mode = 'idle'; target.isp = target.xl = 0; want.dist = dist; centerOn(oLat, oLon); }
+  function setShift(x, y = 0, now = false) { shift.tx = x; shift.ty = y; if (now) { shift.x = x; shift.y = y; } }
 
   // ispVia: cidades pelas quais a operadora passa (desvio); xlVia: [bridges..., final] por rota ExitLag
   function setRoute({ server, ispVia, xl }) {
@@ -253,6 +256,9 @@ export function createGlobe(canvas, origin) {
     if (mode === 'idle' && !reduce) want.yaw -= dt * 0.035;
     cur.yaw += (want.yaw - cur.yaw) * k; cur.pitch += (want.pitch - cur.pitch) * k; cur.dist += (want.dist - cur.dist) * k;
     globe.rotation.y = cur.yaw; tilt.rotation.x = cur.pitch;
+    const ks = 1 - Math.exp(-dt * 3);
+    shift.x += (shift.tx - shift.x) * ks; shift.y += (shift.ty - shift.y) * ks;
+    if (Math.abs(-shift.x - offX) + Math.abs(-shift.y - offY) > 0.05) { offX = -shift.x; offY = -shift.y; camera.setViewOffset(vw, vh, offX, offY, vw, vh); camera.updateProjectionMatrix(); }
     camera.position.set(0, 0, cur.dist); camera.lookAt(0, 0, 0);
     stars.material.uniforms.uTime.value = time; svMat.uniforms.uTime.value = time; ndMat.uniforms.uTime.value = time;
     landMat.uniforms.uSize.value = 9 * clamp((cur.dist - 1) / 3, 0.35, 1) * 1.1;
@@ -294,5 +300,5 @@ export function createGlobe(canvas, origin) {
   }
   let onFrame = null;
   resize(); requestAnimationFrame(frame);
-  return { idle, setRoute, showIsp, showXl, ispFail, dimIsp, scan, screenOf, resize, set onFrame(f) { onFrame = f; }, get route() { return R; }, vO };
+  return { idle, setShift, setRoute, showIsp, showXl, ispFail, dimIsp, scan, screenOf, resize, set onFrame(f) { onFrame = f; }, get route() { return R; }, vO };
 }
