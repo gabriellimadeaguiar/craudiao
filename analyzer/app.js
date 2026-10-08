@@ -508,7 +508,8 @@ $('lgSwitch').addEventListener('click', () => { S.loginMode = S.loginMode === 'l
 function finishLogin(how) {
   $('lgForm').hidden = true; $('lgHead').hidden = true; const d = $('lgDone'); d.hidden = false; d.classList.remove('in'); void d.offsetWidth; d.classList.add('in');
   const p = PLANS.find(x => x.id === S.offer);
-  $('lgDoneTxt').textContent = `${how}${p ? ` ${p.n} plan active.` : ' Your 3-day free trial is on.'} This is where the prototype ends: in the app, ExitLag opens and applies the fixes from your results.`;
+  $('lgDoneTxt').textContent = `${how}${p ? ` ${p.n} plan active.` : ' Your 3-day free trial is on.'} Opening ExitLag: first we map your network, then find your games.`;
+  openHome();
 }
 $('lgForm').addEventListener('submit', e => {
   e.preventDefault();
@@ -520,12 +521,13 @@ $('lgForm').addEventListener('submit', e => {
   finishLogin(S.loginMode === 'login' ? 'Logged in.' : 'Account created.');
 });
 $('lgGoogle').addEventListener('click', () => finishLogin('Signed in with Google.'));
-$('lgRestart').addEventListener('click', () => { S.runId++; S.running = false; S.hw = S.net = S.offer = null; pick = 'trial'; $('lgEmail').value = $('lgPass').value = ''; scene('entry'); });
 
 /* ---------- Entrada: login de quem já assina, ou o check-up para quem é novo ---------- */
 $('enCheck').addEventListener('click', () => scene('intro'));
 $('introLogin').addEventListener('click', () => scene('entry'));
-function enDone() { $('enForm').hidden = true; document.querySelector('.en-head').hidden = true; const d = $('enDone'); d.hidden = false; d.classList.remove('in'); void d.offsetWidth; d.classList.add('in'); }
+// depois do login, o app segue para o fluxo pós-login do protótipo da home: network map › varredura de jogos › onboarding › home
+function openHome() { setTimeout(() => { app.classList.add('leaving'); setTimeout(() => { location.href = 'home.html#map'; }, reduce ? 0 : 600); }, reduce ? 0 : 1600); }
+function enDone() { $('enForm').hidden = true; document.querySelector('.en-head').hidden = true; const d = $('enDone'); d.hidden = false; d.classList.remove('in'); void d.offsetWidth; d.classList.add('in'); openHome(); }
 $('enForm').addEventListener('submit', e => {
   e.preventDefault();
   const em = $('enEmail'), pw = $('enPass');
@@ -537,7 +539,6 @@ $('enForm').addEventListener('submit', e => {
 });
 $('enGoogle').addEventListener('click', enDone);
 $('enForgot').addEventListener('click', () => toast('Reset your password', 'We send a reset link to your email. Not active in the prototype.'));
-$('enBack').addEventListener('click', () => { $('enForm').hidden = false; document.querySelector('.en-head').hidden = false; $('enDone').hidden = true; $('enPass').value = ''; });
 
 /* ---------- Chips do protótipo ---------- */
 function fill() { if (!S.hw) S.hw = hwResult(); if (!S.net) S.net = netResult(simulate(GAMES[S.game], S.region || nearest(GAMES[S.game]))); }
