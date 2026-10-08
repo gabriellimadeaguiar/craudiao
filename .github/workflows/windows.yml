@@ -1,0 +1,50 @@
+# Compila o ExitLag Analyzer (Qt Quick + Qt Quick 3D) para Windows e publica um .zip pronto para rodar.
+# Roda a cada push que mexe em qt/ e também pelo botão "Run workflow" na aba Actions.
+name: Windows build
+
+on:
+  push:
+    paths:
+      - 'qt/**'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6.8
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: 'qtquick3d qtshadertools qtquicktimeline'
+          cache: true
+
+      - name: MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        run: cmake -S qt -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Package (windeployqt)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item build/ExitLagAnalyzer.exe dist/
+          windeployqt --release --qmldir qt/qml --no-translations dist/ExitLagAnalyzer.exe
+          Copy-Item qt/README.md dist/README.md
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ExitLagAnalyzer-windows
+          path: dist
+          if-no-files-found: error
