@@ -6,10 +6,14 @@ App de desktop para Windows com todo o fluxo do protótipo:
 
 ## Rodar no Windows
 
-1. Baixe o `.zip` **ExitLagAnalyzer-windows** gerado pelo GitHub Actions (aba *Actions* do repositório › execução mais recente de *Windows build* › *Artifacts*).
-2. Extraia a pasta inteira e abra `ExitLagAnalyzer.exe`. O app não precisa de instalação nem de administrador.
+Cada execução de *Windows build* no GitHub Actions (aba *Actions* › execução mais recente › *Artifacts*) gera dois arquivos:
 
-O Windows SmartScreen pode avisar na primeira vez, porque o executável não é assinado. Para abrir, clique em *Mais informações* › *Executar assim mesmo*.
+- **ExitLagAnalyzer-Setup**: um único `ExitLagAnalyzer-Setup.exe` (Inno Setup). Abra e siga o assistente. Ele instala para o usuário atual, sem pedir administrador, cria o atalho no Menu Iniciar (e na área de trabalho, se marcado) e aparece em *Aplicativos instalados* para desinstalar. É o arquivo para distribuir.
+- **ExitLagAnalyzer-windows**: a pasta pronta, para rodar sem instalar. Extraia a pasta inteira e abra `ExitLagAnalyzer.exe`.
+
+O runtime do Visual C++ vai junto do app, então não é preciso instalar o vc_redist. O instalador é definido em `installer/ExitLagAnalyzer.iss`, e o ícone é gerado por `tools/make_appicon.py`.
+
+O Windows SmartScreen pode avisar na primeira vez, porque o instalador e o executável não são assinados (para tirar o aviso, assine com um certificado de assinatura de código). Para abrir, clique em *Mais informações* › *Executar assim mesmo*.
 
 ## O que é medido de verdade
 

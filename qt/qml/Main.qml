@@ -29,8 +29,24 @@ Window {
         property string offer: "trial"
         property string loginMode: "signup"
         property bool loggedIn: false
+        // home
+        property bool exitlagOn: true
+        property bool netDown: false
+        property var notifications: []       // { title, desc, when, unread }
+        property string email: ""
+        property var mapResults: []
+        readonly property var win: win
         function go(s) { scene = s; }
         function toast(t, d) { toaster.show(t, d); }
+        function notify(t, d) {
+            var n = notifications.slice();
+            n.unshift({ title: t, desc: d || "", when: Qt.formatTime(new Date(), "hh:mm"), unread: true });
+            notifications = n.slice(0, 30);
+        }
+        function markRead() { notifications = notifications.map(function (n) { return { title: n.title, desc: n.desc, when: n.when, unread: false }; }); }
+        function toggleMaximize() { win.visibility === Window.Maximized ? win.showNormal() : win.showMaximized(); }
+        function rerun() { go(hw ? "analysis" : "intro"); }
+        function logout() { loggedIn = false; go("entry"); }
     }
 
     Item {
@@ -42,7 +58,7 @@ Window {
 
         Rectangle { anchors.fill: parent; gradient: Gradient { GradientStop { position: 0; color: "#10131a" } GradientStop { position: 0.6; color: Theme.surface } } }
 
-        Globe { id: globe; anchors.fill: parent; opacity: app.scene === "results" || (app.scene === "analysis" && !analysis.netOn) ? 0 : app.scene === "signup" ? 0.45 : 1
+        Globe { id: globe; anchors.fill: parent; interactive: app.scene === "home" || app.scene === "entry" || app.scene === "netmap"; opacity: app.scene === "results" || (app.scene === "analysis" && !analysis.netOn) ? 0 : app.scene === "signup" ? 0.45 : 1
             Behavior on opacity { NumberAnimation { duration: 900 } } }
 
         EntryScreen { id: entry; anchors.fill: parent; app: app; globe: globe; active: app.scene === "entry" }
@@ -59,11 +75,12 @@ Window {
             id: chrome
             anchors.left: parent.left; anchors.right: parent.right; height: 72
             z: 50
+            visible: app.scene !== "home"      // a home tem a própria top bar
             MouseArea {
                 anchors.fill: parent
                 property point p
                 onPressed: function (m) { if (win.startSystemMove) win.startSystemMove(); }
-                onDoubleClicked: win.visibility === Window.Maximized ? win.showNormal() : win.showMaximized()
+                onDoubleClicked: app.toggleMaximize()
             }
             Logo { x: 32; y: 26 }
             Row {
@@ -81,7 +98,8 @@ Window {
 
     Component.onCompleted: {
         scanner.scan();
-        if (Platform.startScene !== "") app.scene = Platform.startScene;
+        // --scene=home/pc abre a home já com a gaveta do PC (atalho de teste: pc, profile, help, notifications, menu, off)
+        if (Platform.startScene !== "") { var sc = Platform.startScene.split("/"); home.devOpen = sc[1] || ""; app.scene = sc[0]; }
         Platform.log("ExitLag Analyzer · Qt " + Platform.qtVersion + " · origin " + app.origin[2]);
     }
 }

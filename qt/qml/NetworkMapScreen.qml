@@ -53,6 +53,9 @@ Item {
     }
     function finish() {
         timer.stop();
+        app.mapResults = results;
+        var ok = results.filter(function (r) { return r.ok; }).sort(function (a, b) { return a.ms - b.ms; });
+        if (ok.length) app.notify("Network map ready", "Best region: " + ok[0].name + " (" + ok[0].city + "), " + Math.round(ok[0].ms) + " ms.");
         globe.lookAt(app.origin[0], app.origin[1], 6.45);
         done.start();
     }

@@ -1,6 +1,7 @@
 #include <QDir>
 #include <QFontDatabase>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
 #include <QSurfaceFormat>
@@ -15,6 +16,7 @@ int main(int argc, char *argv[])
     QSurfaceFormat::setDefaultFormat(fmt);
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("ExitLag Analyzer"));
+    QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/app.png")));
     QGuiApplication::setOrganizationName(QStringLiteral("ExitLag"));
 
     // fontes da marca embutidas: Anek Latin (títulos), Ubuntu Sans (texto), Ubuntu Sans Mono (leituras)

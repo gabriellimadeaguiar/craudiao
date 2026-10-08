@@ -11,41 +11,52 @@ import ExitLag
 Item {
     id: globe
     readonly property real radius: 100
+    // destino de câmera (as telas mexem nestes) e o valor desenhado, que persegue o destino suavemente a cada quadro
     property real lat: 0
     property real lon: 0
     property real dist: 6.45            // distância da câmera, em raios
     property real shiftX: 0             // desloca o globo na tela (px), sem mexer no tamanho
+    property real curLat: 0
+    property real curLon: 0
+    property real curDist: 7.4
+    property real curShift: 0
     property bool spinning: true
     property real spinSpeed: 2.2        // graus por segundo no modo ocioso
+    property real spinRamp: 0           // o giro ocioso começa devagar e acelera, sem tranco
+    property bool interactive: true     // arrastar para girar, roda para aproximar
+    property bool offline: false        // ExitLag desligada: o globo fica num laranja sutil
     property real time: 0
     property var routes: []             // [{ id, group, stops: [[lat, lon]...], color, tube, lift, speed, packets }]
     property var tags: []               // [{ lat, lon, text, sub, kind: you|server|bad|node|cont, below }]
     property var groupsShown: ({})
     property var groupsGain: ({})
-    property real nodesOpacity: 0.35    // rede ExitLag ao fundo
-    property color landColor: "#8a93a0"
+    property real nodesOpacity: offline ? 0.08 : 0.35
+    property color landColor: offline ? Theme.globeLandOff : Theme.globeLand
+    property color rimColor: offline ? Theme.globeRimOff : Theme.globeRim
+    Behavior on nodesOpacity { NumberAnimation { duration: Theme.d500 } }
+    Behavior on landColor { ColorAnimation { duration: Theme.d900 } }
+    Behavior on rimColor { ColorAnimation { duration: Theme.d900 } }
 
-    Behavior on dist { NumberAnimation { duration: 1600; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard } }
-    Behavior on shiftX { NumberAnimation { duration: 1400; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard } }
-    Behavior on nodesOpacity { NumberAnimation { duration: 600 } }
+    // centro e raio do globo na tela (para a órbita de jogos, o cursor e o pulso)
+    readonly property real screenRadius: height / 2 / Math.tan(15 * Math.PI / 180) / Math.sqrt(Math.max(curDist * curDist - 1, 0.01))
+    readonly property point screenCenter: Qt.point(width / 2 + curShift, height / 2)
 
     function vec(la, lo, r) {
         var a = la * Math.PI / 180, o = lo * Math.PI / 180;
         return Qt.vector3d(Math.cos(a) * Math.sin(o) * r, Math.sin(a) * r, Math.cos(a) * Math.cos(o) * r);
     }
-    // centraliza um ponto com uma animação suave pelo caminho mais curto
+    // centraliza um ponto pelo caminho mais curto; o movimento em si é a suavização do quadro
     function lookAt(la, lo, d) {
-        spinning = false;
-        var dl = ((lo - lon) % 360 + 540) % 360 - 180;
-        latAnim.to = Math.max(-55, Math.min(55, la)); lonAnim.to = lon + dl;
-        moveAnim.restart();
+        spinning = false; spinRamp = 0; velLat = 0; velLon = 0;
+        var dl = ((lo - curLon) % 360 + 540) % 360 - 180;
+        lat = Math.max(-60, Math.min(60, la)); lon = curLon + dl;
         if (d !== undefined) dist = d;
     }
     function idle(d, la, lo) {
         clear();
         if (la !== undefined) lookAt(la, lo);
         dist = d || 6.45;
-        spinTimer.restart();
+        spinTimer.interval = 1800; spinTimer.restart();
     }
     function clear() { routes = []; tags = []; groupsShown = ({}); groupsGain = ({}); }
     function show(group, on) { var g = Object.assign({}, groupsShown); g[group] = on; groupsShown = g; }
@@ -53,6 +64,8 @@ Item {
     function addRoute(r) { routes = routes.concat([r]); }
     function addTag(t) { tags = tags.concat([t]); return tags.length - 1; }
     function setTag(i, patch) { var a = tags.slice(); a[i] = Object.assign({}, a[i], patch); tags = a; }
+    // anel verde que sai da borda do globo, uma vez (ligar a ExitLag)
+    function pulse(color) { pulseRing.tint = color || Theme.success; pulseAnim.restart(); }
     // enquadra um conjunto de pontos: centro médio e distância para caber tudo
     function frame(points, minD, maxD) {
         var x = 0, y = 0, z = 0;
@@ -64,24 +77,77 @@ Item {
         lookAt(cla, clo, Math.max(minD || 2.9, Math.min(maxD || 6.45, 1.4 + spread * 5.2)));
     }
 
-    ParallelAnimation {
-        id: moveAnim
-        NumberAnimation { id: latAnim; target: globe; property: "lat"; duration: 1600; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard }
-        NumberAnimation { id: lonAnim; target: globe; property: "lon"; duration: 1600; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard }
-    }
-    Timer { id: spinTimer; interval: 1700; onTriggered: globe.spinning = true }
+    Timer { id: spinTimer; interval: 1800; onTriggered: globe.spinning = true }
+
+    // inércia do arrasto
+    property real velLat: 0
+    property real velLon: 0
+    property bool dragging: false
 
     FrameAnimation {
         running: globe.visible
         onTriggered: {
-            globe.time += frameTime;
-            if (globe.spinning && !moveAnim.running) globe.lon += frameTime * globe.spinSpeed;
+            var dt = Math.min(frameTime, 0.05);
+            globe.time += dt;
+            if (!globe.dragging) {
+                // solta o globo com a velocidade do arrasto e deixa parar devagar
+                if (Math.abs(globe.velLon) + Math.abs(globe.velLat) > 0.05) {
+                    globe.lon += globe.velLon * dt; globe.lat = Math.max(-70, Math.min(70, globe.lat + globe.velLat * dt));
+                    var dec = Math.exp(-dt * 2.6); globe.velLon *= dec; globe.velLat *= dec;
+                }
+                if (globe.spinning) {
+                    globe.spinRamp = Math.min(1, globe.spinRamp + dt * 0.6);
+                    globe.lon += dt * globe.spinSpeed * globe.spinRamp * globe.spinRamp;
+                }
+            }
+            // perseguição exponencial: muda de destino no meio do caminho sem tranco
+            var kr = 1 - Math.exp(-dt * (globe.dragging ? 16 : 2.4));
+            var kd = 1 - Math.exp(-dt * 2.0);
+            globe.curLat += (globe.lat - globe.curLat) * kr;
+            globe.curLon += (globe.lon - globe.curLon) * kr;
+            globe.curDist += (globe.dist - globe.curDist) * kd;
+            globe.curShift += (globe.shiftX - globe.curShift) * kd;
         }
+    }
+
+    // arrastar gira (com inércia), roda aproxima; o cursor vira mão aberta sobre o planeta
+    DragHandler {
+        id: drag
+        enabled: globe.interactive
+        target: null
+        property point last: Qt.point(0, 0)
+        property real lastT: 0
+        onActiveChanged: {
+            globe.dragging = active;
+            if (active) { last = Qt.point(0, 0); lastT = Date.now(); globe.spinning = false; globe.spinRamp = 0; globe.velLat = 0; globe.velLon = 0; spinTimer.stop(); }
+            else spinTimer.interval = 4000, spinTimer.restart();
+        }
+        onTranslationChanged: {
+            var dx = translation.x - last.x, dy = translation.y - last.y, now = Date.now(), dtt = Math.max(1, now - lastT) / 1000;
+            last = translation; lastT = now;
+            var k = 0.22 * globe.curDist / 6.45;
+            globe.lon -= dx * k; globe.lat = Math.max(-70, Math.min(70, globe.lat + dy * k));
+            globe.velLon = globe.velLon * 0.6 + (-dx * k / dtt) * 0.4;
+            globe.velLat = globe.velLat * 0.6 + (dy * k / dtt) * 0.4;
+        }
+    }
+    WheelHandler {
+        enabled: globe.interactive
+        target: null
+        onWheel: function (e) { globe.dist = Math.max(2.4, Math.min(9, globe.dist * (1 - e.angleDelta.y / 1600))); }
+    }
+    HoverHandler {
+        enabled: globe.interactive
+        readonly property bool overGlobe: {
+            var dx = point.position.x - globe.screenCenter.x, dy = point.position.y - globe.screenCenter.y;
+            return Math.sqrt(dx * dx + dy * dy) < globe.screenRadius;
+        }
+        cursorShape: drag.active ? Qt.ClosedHandCursor : overGlobe ? Qt.OpenHandCursor : Qt.ArrowCursor
     }
 
     View3D {
         id: view
-        x: globe.shiftX
+        x: globe.curShift
         width: parent.width; height: parent.height
         renderMode: View3D.Offscreen
         environment: SceneEnvironment {
@@ -90,28 +156,28 @@ Item {
             antialiasingQuality: SceneEnvironment.High
         }
         camera: cam
-        PerspectiveCamera { id: cam; z: globe.dist * globe.radius; fieldOfView: 30; clipNear: 5; clipFar: 9000 }
+        PerspectiveCamera { id: cam; z: globe.curDist * globe.radius; fieldOfView: 30; clipNear: 5; clipFar: 9000 }
 
         // céu
         Model {
             geometry: StarGeometry { }
-            materials: DefaultMaterial { lighting: DefaultMaterial.NoLighting; diffuseColor: "#b9c7dc"; opacity: 0.5 }
+            materials: DefaultMaterial { lighting: DefaultMaterial.NoLighting; diffuseColor: Theme.globeStars; opacity: 0.5 }
         }
 
         Node {
             id: tilt
-            eulerRotation.x: globe.lat
+            eulerRotation.x: globe.curLat
             Node {
                 id: spin
-                eulerRotation.y: -globe.lon
+                eulerRotation.y: -globe.curLon
 
                 Model {
                     source: "#Sphere"
                     scale: Qt.vector3d(globe.radius / 50 * 0.995, globe.radius / 50 * 0.995, globe.radius / 50 * 0.995)
                     materials: CustomMaterial {
                         shadingMode: CustomMaterial.Unshaded
-                        property color deepColor: "#07080b"
-                        property color rimColor: "#6f8fb8"
+                        property color deepColor: Theme.globeDeep
+                        property color rimColor: globe.rimColor
                         vertexShader: "shaders/glow.vert"
                         fragmentShader: "shaders/glow.frag"
                     }
@@ -156,7 +222,7 @@ Item {
                     delegate: Node {
                         required property var modelData
                         position: globe.vec(modelData.lat, modelData.lon, globe.radius * 1.008)
-                        readonly property color c: modelData.kind === "you" ? "#ebeced" : modelData.kind === "bad" ? Theme.primary : modelData.kind === "server" || modelData.kind === "node" ? Theme.success : "#ebeced"
+                        readonly property color c: modelData.kind === "you" ? Theme.textMain : modelData.kind === "bad" ? Theme.primary : modelData.kind === "server" || modelData.kind === "node" ? Theme.success : Theme.textMain
                         readonly property real s: modelData.kind === "node" || modelData.kind === "cont" ? 0.011 : 0.018
                         Model {
                             source: "#Sphere"; scale: Qt.vector3d(parent.s, parent.s, parent.s)
@@ -184,7 +250,7 @@ Item {
                 cullMode: Material.FrontFaceCulling
                 sourceBlend: CustomMaterial.One
                 destinationBlend: CustomMaterial.One
-                property color rimColor: "#6f8fb8"
+                property color rimColor: globe.rimColor
                 property real intensity: 0.5
                 vertexShader: "shaders/atmo.vert"
                 fragmentShader: "shaders/atmo.frag"
@@ -201,12 +267,26 @@ Item {
             repeater: markers
             tagIndex: index
             view3d: view
-            offsetX: globe.shiftX
+            offsetX: globe.curShift
             text: modelData.text || ""
             sub: modelData.sub || ""
             kind: modelData.kind
             below: modelData.below === true
             hidden: modelData.hidden === true || !modelData.text
+        }
+    }
+
+    Rectangle {
+        id: pulseRing
+        x: globe.screenCenter.x - width / 2; y: globe.screenCenter.y - height / 2
+        width: globe.screenRadius * 2; height: width; radius: width / 2
+        color: "transparent"; border.width: 2; border.color: pulseRing.tint
+        property color tint: Theme.success
+        opacity: 0
+        ParallelAnimation {
+            id: pulseAnim
+            NumberAnimation { target: pulseRing; property: "scale"; from: 1; to: 1.5; duration: Theme.d900 * 1.4; easing.type: Easing.OutCubic }
+            NumberAnimation { target: pulseRing; property: "opacity"; from: 0.9; to: 0; duration: Theme.d900 * 1.4; easing.type: Easing.OutCubic }
         }
     }
 }

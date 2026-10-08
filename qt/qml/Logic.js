@@ -86,6 +86,8 @@ var CATALOG = {
     naruto:   { name: "Naruto Shippuden: Ultimate Ninja Storm 4", img: G + "box-naruto-storm-4.jpg", regions: ["nae", "euw", "jp"] },
     tl:       { name: "Throne and Liberty", img: G + "throne-and-liberty.jpg", regions: ["nae", "naw", "euw", "br"] }
 };
+// ícones de app com cantos arredondados (gerados por tools/make_icons.py; os reais quando há, senão um recorte da capa)
+function iconFor(id) { return CATALOG[id] ? "qrc:/icons/" + id + ".png" : ""; }
 // sem jogos achados no PC: os mais jogados, para a análise não travar
 var POPULAR = ["lol", "cs2", "fortnite", "apex", "dota2", "r6", "ow2", "rl"];
 function nearestRegion(gameId, origin) {

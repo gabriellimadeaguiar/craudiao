@@ -133,7 +133,9 @@ Item {
     function login() {
         // sem conexão com o sistema de contas da ExitLag nesta versão: qualquer entrada passa
         done = true;
+        app.email = email.text.length ? email.text : "player@exitlag.com";
         app.loggedIn = true;
+        app.notify("Welcome back", "Logged in as " + app.email + ".");
         leave.start();
     }
     Timer { id: leave; interval: 1400; onTriggered: root.app.go("netmap") }

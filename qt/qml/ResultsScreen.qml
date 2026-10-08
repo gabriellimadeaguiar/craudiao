@@ -38,7 +38,7 @@ Item {
             // abertura
             Column {
                 width: parent.width; spacing: 16
-                IconBtn { icon: "back"; tip: "Back to log in"; iconColor: Theme.textMain; x: -10; onClicked: root.app.go("entry") }
+                IconBtn { icon: "back"; tip: root.app.loggedIn ? "Back to home" : "Back to log in"; iconColor: Theme.textMain; x: -10; onClicked: root.app.go(root.app.loggedIn ? "home" : "entry") }
                 Txt { role: "eyebrow"; text: root.net ? "Your results · " + L.CATALOG[root.net.gameId].name + " · " + root.app.origin[2] + " → " + root.region.city : "" }
                 Txt { role: "hero"; font.pixelSize: 72; lineHeight: 72; width: 900; text: root.hw && root.net ? L.headline(root.hw, root.net.findings) : "" }
                 Txt { role: "bodyLg"; width: 880; text: "We found " + root.all.length + " problems. ExitLag fixes " + root.fixable + " of them" + (root.all.length ? ", starting with " + root.all[0].t.charAt(0).toLowerCase() + root.all[0].t.slice(1) + "." : ".") }
@@ -200,7 +200,7 @@ Item {
 
             // oferta
             Rectangle {
-                id: offer; width: parent.width; height: offerRow.implicitHeight + 112; radius: 24
+                id: offer; visible: !root.app.loggedIn; width: parent.width; height: offerRow.implicitHeight + 112; radius: 24
                 property bool seen: flick.reveal(offer)
                 opacity: seen ? 1 : 0; Behavior on opacity { NumberAnimation { duration: 700 } }
                 gradient: Gradient { orientation: Gradient.Horizontal; GradientStop { position: 0; color: "#1d2129" } GradientStop { position: 0.6; color: Theme.container } }
@@ -267,17 +267,17 @@ Item {
     // barra flutuante: some quando a oferta entra na tela
     Rectangle {
         id: dock
-        readonly property bool hide: offer.y + 40 < flick.contentY + flick.height - 120 + page.y - 104
+        readonly property bool hide: !root.app.loggedIn && offer.y + 40 < flick.contentY + flick.height - 120 + page.y - 104
         width: 760; height: 56; radius: 14
         anchors.horizontalCenter: parent.horizontalCenter
         y: parent.height - height - 24 + (hide ? 40 : 0)
         opacity: hide ? 0 : 1
         Behavior on opacity { NumberAnimation { duration: 400 } }
         Behavior on y { NumberAnimation { duration: 500; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard } }
-        color: "#e6191d24"; border.width: 1; border.color: Theme.divider
+        color: Theme.dockBg; border.width: 1; border.color: Theme.divider
         Txt { x: 24; anchors.verticalCenter: parent.verticalCenter; role: "body"; textFormat: Text.StyledText
-            text: "ExitLag fixes <b>" + root.fixable + " of the " + root.all.length + "</b> problems we found." }
-        Btn { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "See how to fix them"
-            onClicked: { scrollAnim.to = Math.min(flick.contentHeight - flick.height, page.y + offer.y - (flick.height - offer.height) / 2); scrollAnim.restart(); } }
+            text: (root.app.loggedIn ? "ExitLag is fixing <b>" : "ExitLag fixes <b>") + root.fixable + " of the " + root.all.length + "</b> problems we found." }
+        Btn { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: root.app.loggedIn ? "Back to home" : "See how to fix them"
+            onClicked: { if (root.app.loggedIn) { root.app.go("home"); return; } scrollAnim.to = Math.min(flick.contentHeight - flick.height, page.y + offer.y - (flick.height - offer.height) / 2); scrollAnim.restart(); } }
     }
 }

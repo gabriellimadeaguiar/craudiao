@@ -25,6 +25,8 @@ qt_add_executable(ExitLagAnalyzer WIN32 MACOSX_BUNDLE
 
 if(WIN32)
     target_link_libraries(ExitLagAnalyzer PRIVATE iphlpapi ws2_32)
+    # ícone do .exe (Explorer, barra de tarefas, atalhos do instalador)
+    target_sources(ExitLagAnalyzer PRIVATE src/app.rc)
 endif()
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -56,6 +58,12 @@ qt_add_qml_module(ExitLagAnalyzer
         qml/Badge.qml
         qml/Globe.qml
         qml/GlobeTag.qml
+        qml/Toggle.qml
+        qml/Drawer.qml
+        qml/SideMenu.qml
+        qml/TopBar.qml
+        qml/GameOrbit.qml
+        qml/PcResultView.qml
         qml/RouteModel.qml
         qml/Ring.qml
         qml/Spark.qml
@@ -78,11 +86,12 @@ qt_add_qml_module(ExitLagAnalyzer
 )
 
 file(GLOB GAME_IMAGES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} resources/games/*)
+file(GLOB ICON_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} resources/icons/*.png)
 file(GLOB FONT_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} resources/fonts/*.ttf)
 qt_add_resources(ExitLagAnalyzer "assets"
     PREFIX "/"
     BASE resources
-    FILES resources/data/land.bin ${GAME_IMAGES} ${FONT_FILES}
+    FILES resources/data/land.bin resources/app.png ${GAME_IMAGES} ${ICON_FILES} ${FONT_FILES}
 )
 
 target_include_directories(ExitLagAnalyzer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

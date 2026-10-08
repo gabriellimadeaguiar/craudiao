@@ -26,7 +26,7 @@ Item {
                 Badge { sev: "success"; text: root.plan ? root.plan.n + " plan · $" + root.plan.p + "/mo" : "3-day free trial" }
                 Txt { role: "h1"; font.pixelSize: 34; lineHeight: 38; text: root.signup ? "Create your account" : "Log in to ExitLag" }
                 Txt { role: "body"; color: Theme.textVariant; width: parent.width; text: root.signup ? "Your results come with you, so ExitLag can start fixing them right away." : "Your results from this check-up come with you." } }
-            Field { width: parent.width; label: "Email"; icon: "mail"; placeholder: "you@example.com" }
+            Field { id: email; width: parent.width; label: "Email"; icon: "mail"; placeholder: "you@example.com" }
             Field { width: parent.width; label: "Password"; icon: "lock"; placeholder: root.signup ? "At least 8 characters" : "Your password"; password: true }
             Btn { width: parent.width; text: root.signup ? (root.plan ? "Create account and subscribe" : "Create account and start trial") : "Log in"; onClicked: root.finish() }
             Row { width: parent.width; spacing: 12
@@ -49,6 +49,12 @@ Item {
                 text: (root.plan ? root.plan.n + " plan active. " : "Your 3-day free trial is on. ") + "Opening ExitLag: first we map your network, then find your games." }
         }
     }
-    function finish() { done = true; app.loggedIn = true; leave.start(); }
+    function finish() {
+        done = true;
+        app.email = email.text.length ? email.text : "player@exitlag.com";
+        app.loggedIn = true;
+        app.notify(signup ? (plan ? "Subscription active" : "Your free trial started") : "Welcome back", signup ? "ExitLag can now fix the problems from your check-up." : "Logged in as " + app.email + ".");
+        leave.start();
+    }
     Timer { id: leave; interval: 1600; onTriggered: root.app.go("netmap") }
 }

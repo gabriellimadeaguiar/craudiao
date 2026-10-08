@@ -24,7 +24,7 @@ Item {
     GameScanner {
         id: scanner
         onLauncherScanned: function (launcher, installed, folders, found) { root.launchers = root.launchers.concat([{ name: launcher, installed: installed, folders: folders, games: found }]); }
-        onFinished: function (list) { root.app.detected = list; root.scanning = false; }
+        onFinished: function (list) { root.app.detected = list; root.scanning = false; root.app.notify(list.length ? list.length + (list.length > 1 ? " games found" : " game found") : "No games found", list.length ? "They are on your home, in orbit around the globe." : "Use search to add a game."); }
     }
     function begin() {
         launchers = []; shown = []; games = []; finished = false; scanning = true;
