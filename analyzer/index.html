@@ -395,10 +395,8 @@ svg.i.xs { width: 16px; height: 16px; }
 
 /* fechar os resultados e voltar ao login: só aparece na cena de resultados */
 .close-res { display: none; }
-.app[data-scene="results"] .close-res { display: inline-flex; animation: rise 500ms var(--ease-decelerate) 400ms both; }
-.close-res.btn { background: #111317b3; backdrop-filter: blur(10px); }
-.close-res.btn svg { width: 18px; height: 18px; }
-.vdiv { width: 1px; height: 16px; background: var(--divider); margin: 0 var(--sp-sm); }
+.app[data-scene="results"] .close-res { display: grid; animation: rise 500ms var(--ease-decelerate) 400ms both; }
+.app[data-scene="results"] .corner.l { left: var(--sp-xl); }
 
 /* snackbar */
 .snackbar { position: absolute; left: 50%; bottom: var(--sp-xl); z-index: 600; width: 380px; translate: -50% 0; border-radius: 10px; overflow: hidden; background: var(--input); box-shadow: var(--shadow-panel);
@@ -449,6 +447,7 @@ svg.i.xs { width: 16px; height: 16px; }
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.8-6.5-11a6.5 6.5 0 0 1 13 0c0 5.2-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c1-3.6 4-5.5 7.5-5.5s6.5 1.9 7.5 5.5"/></symbol>
     <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
     <symbol id="i-redo" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15"/></symbol>
   </defs>
 </svg>
@@ -474,10 +473,8 @@ svg.i.xs { width: 16px; height: 16px; }
   <div class="app" id="app" data-scene="entry">
     <div class="globe-host" id="globeHost"><canvas id="globe" role="img" aria-label="Globe with your location and the routes to the game server"></canvas><div class="globe-tags" id="gTags"></div></div>
 
-    <div class="corner l"><img class="logo" src="logo.svg" alt="ExitLag"></div>
+    <div class="corner l"><button class="icon-btn close-res" type="button" id="closeRes" aria-label="Back to log in" title="Back to log in"><svg class="i"><use href="#i-back"/></svg></button><img class="logo" src="logo.svg" alt="ExitLag"></div>
     <div class="corner r">
-      <button class="btn outlined close-res" type="button" id="closeRes"><svg class="i sm"><use href="#i-close"/></svg>Close results</button>
-      <span class="vdiv close-res" aria-hidden="true"></span>
       <button class="icon-btn" type="button" aria-label="Minimize"><svg class="i"><use href="#i-min"/></svg></button>
       <button class="icon-btn" type="button" aria-label="Close"><svg class="i"><use href="#i-close"/></svg></button>
     </div>
