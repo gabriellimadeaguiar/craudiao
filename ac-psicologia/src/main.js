@@ -22,7 +22,7 @@ if (bar && heroCta) new IntersectionObserver(([e]) => bar.classList.toggle('show
 
 // seções entram com suavidade (o conteúdo já está visível sem JS)
 const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } }), { rootMargin: '0px 0px -10% 0px' })
-document.querySelectorAll('main > section:not(:first-child)').forEach(s => { if (s.getBoundingClientRect().top > innerHeight) { s.classList.add('reveal'); io.observe(s) } })
+document.querySelectorAll("main > section:not(:first-of-type)").forEach(s => { if (s.getBoundingClientRect().top > innerHeight) { s.classList.add('reveal'); io.observe(s) } })
 
 // copiar número (página Contato)
 const cf = document.getElementById('copiar-fone')

@@ -76,7 +76,7 @@ q { quotes: "“" "”" }
 
 /* ---------- seções ---------- */
 main > section { padding: var(--space) var(--gutter) }
-main > section:first-child { padding-top: clamp(32px, 6vw, 72px) }
+main > section:first-of-type { padding-top: clamp(32px, 6vw, 72px) }
 .band.white { background: #fff }
 .band.navy { background: var(--navy); color: var(--on-navy) }
 .band.navy h2, .band.navy h3 { color: #fff }
