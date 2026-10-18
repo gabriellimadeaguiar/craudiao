@@ -1,0 +1,2 @@
+Pacote de produção do site anacarolinaevaristo.com.br, gerado da main (49cbedf) com node build.mjs.
+Não edite aqui: mude ac-psicologia/ na main e gere de novo.
