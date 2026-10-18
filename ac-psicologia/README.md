@@ -72,3 +72,12 @@ Metas: LCP abaixo de 2,5 s, INP abaixo de 200 ms e CLS abaixo de 0,1 no celular.
 ## Pendências
 
 Veja `PENDENCIAS.md`.
+
+## Produção (Hostinger)
+
+O site está em `anacarolinaevaristo.com.br`, na hospedagem da Hostinger (conta `u761071736`, CDN da Hostinger na frente). Para publicar uma versão nova:
+
+1. Gere o pacote a partir da `main` (`node build.mjs` e `cd public && zip -r site.zip .`) e envie para a branch `producao`, que guarda só o `site.zip`.
+2. Na Hostinger, faça o deploy Git dessa branch na pasta `_publicar` do site.
+3. Publique o `_publicar/site.zip` como site estático. Isso substitui todo o conteúdo de `public_html`, inclusive a pasta `_publicar`.
+4. Limpe o cache do site, que também limpa a CDN.
