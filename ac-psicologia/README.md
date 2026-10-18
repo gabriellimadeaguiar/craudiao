@@ -29,7 +29,9 @@ O domínio vem de `DOMINIO` (padrão: `https://acpsicologia.com.br`). Exemplo: `
 - Comando de build: `node build.mjs`
 - Diretório de saída: `public`
 - Diretório raiz: `ac-psicologia`
-- Variável de ambiente: `DOMINIO` com o domínio final
+- O domínio padrão é `https://anacarolinaevaristo.com.br`
+
+Em hospedagem com Apache (cPanel, Hostinger), envie o conteúdo de `public/` para a pasta `public_html`. O `.htaccess` já cuida de HTTPS, do `www` e da página 404.
 
 ## Decisões de usabilidade
 

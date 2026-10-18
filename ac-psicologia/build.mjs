@@ -1,8 +1,8 @@
 // Monta o site estático em public/ a partir de content/ e src/. Sem dependências: `node build.mjs`.
 import { readFileSync as read, writeFileSync as write, mkdirSync, rmSync, copyFileSync, readdirSync } from 'node:fs'
 
-// enxuto: domínio provisório até a escolha final (acpsicologia.com.br ou anacarolinaevaristo.com.br)
-const DOMINIO = process.env.DOMINIO || 'https://acpsicologia.com.br'
+// domínio de produção (decidido em outubro de 2026)
+const DOMINIO = process.env.DOMINIO || 'https://anacarolinaevaristo.com.br'
 const OUT = 'public'
 const FONTS = 'https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;1,6..96,500&family=Questrial&display=swap'
 const CRP = 'CRP 16/5549'
@@ -152,7 +152,7 @@ mkdirSync(`${OUT}/assets/js`, { recursive: true })
 mkdirSync(`${OUT}/assets/img`, { recursive: true })
 write(`${OUT}/assets/js/silk.js`, minJs(read('src/silk.js', 'utf8')))
 for (const f of readdirSync('src/img')) copyFileSync(`src/img/${f}`, `${OUT}/assets/img/${f}`)
-for (const f of ['favicon.svg', 'apple-touch-icon.png', 'og.png']) copyFileSync(`src/${f}`, `${OUT}/${f}`)
+for (const f of ['favicon.svg', 'apple-touch-icon.png', 'og.png', '.htaccess']) copyFileSync(`src/${f}`, `${OUT}/${f}`)
 
 const hoje = new Date().toISOString().slice(0, 10)
 write(`${OUT}/sitemap.xml`, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${PAGES.filter(p => !p.noindex).map(p => ` <url><loc>${DOMINIO}${p.path}</loc><lastmod>${hoje}</lastmod></url>`).join('\n')}\n</urlset>\n`)
