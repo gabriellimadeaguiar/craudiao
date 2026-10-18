@@ -1,0 +1,12 @@
+// Publica o site no Worker "carol" da Cloudflare, que responde em anacarolinaevaristo.com.br.
+// Uso: node build.mjs && npx wrangler@4 deploy   (precisa de CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID)
+// Os domínios do Worker são configurados no painel da Cloudflare; este arquivo não mexe neles.
+{
+  "name": "carol",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}

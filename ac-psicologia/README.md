@@ -73,9 +73,19 @@ Metas: LCP abaixo de 2,5 s, INP abaixo de 200 ms e CLS abaixo de 0,1 no celular.
 
 Veja `PENDENCIAS.md`.
 
-## Produção (Hostinger)
+## Produção (Cloudflare, Worker `carol`)
 
-O site está em `anacarolinaevaristo.com.br`, na hospedagem da Hostinger (conta `u761071736`, CDN da Hostinger na frente). Para publicar uma versão nova:
+O domínio usa o DNS da Cloudflare e é servido pelo Worker `carol`. Para publicar:
+
+```sh
+node build.mjs && npx wrangler@4 deploy
+```
+
+Precisa de `CLOUDFLARE_API_TOKEN`, com permissão para editar Workers, e de `CLOUDFLARE_ACCOUNT_ID`, no ambiente.
+
+## Cópia na Hostinger
+
+A hospedagem da Hostinger (conta `u761071736`) também tem o site. Hoje ela não recebe o tráfego, porque o domínio aponta para a Cloudflare. Para atualizá-la:
 
 1. Gere o pacote a partir da `main` (`node build.mjs` e `cd public && zip -r site.zip .`) e envie para a branch `producao`, que guarda só o `site.zip`.
 2. Na Hostinger, faça o deploy Git dessa branch na pasta `_publicar` do site.

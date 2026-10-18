@@ -157,7 +157,9 @@ for (const f of ['favicon.svg', 'apple-touch-icon.png', 'og.png', '.htaccess']) 
 const hoje = new Date().toISOString().slice(0, 10)
 write(`${OUT}/sitemap.xml`, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${PAGES.filter(p => !p.noindex).map(p => ` <url><loc>${DOMINIO}${p.path}</loc><lastmod>${hoje}</lastmod></url>`).join('\n')}\n</urlset>\n`)
 write(`${OUT}/robots.txt`, `User-agent: *\nAllow: /\n\nSitemap: ${DOMINIO}/sitemap.xml\n`)
-// cabeçalhos do Cloudflare Pages: imagens e scripts em cache por uma semana
+// o .htaccess só serve para a Hostinger: não vai para o Worker da Cloudflare
+write(`${OUT}/.assetsignore`, '.htaccess\n.assetsignore\n')
+// cabeçalhos da Cloudflare (Worker com assets): imagens e scripts em cache por uma semana
 write(`${OUT}/_headers`, `/assets/*\n  Cache-Control: public, max-age=604800\n/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`)
 
 console.log(`ok: ${PAGES.length} páginas em ${OUT}/`)
