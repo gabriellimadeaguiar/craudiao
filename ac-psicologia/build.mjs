@@ -75,7 +75,7 @@ ${p.noindex ? '<meta name="robots" content="noindex">' : `<link rel="canonical" 
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${FONTS}" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="${FONTS}"></noscript>
-${p.key === 'inicio' ? '<link rel="preload" as="image" href="/assets/img/ana-carolina.webp" fetchpriority="high">' : ''}
+${p.key === 'inicio' ? '<link rel="preload" as="image" href="/assets/img/ana-inicio-360.webp" imagesrcset="/assets/img/ana-inicio-360.webp 360w, /assets/img/ana-inicio-720.webp 720w" imagesizes="(max-width: 820px) 88px, 340px" fetchpriority="high">' : ''}
 <style>${CSS}</style>
 ${ld.map(o => `<script type="application/ld+json">${JSON.stringify(o)}</script>`).join('\n')}
 </head>
